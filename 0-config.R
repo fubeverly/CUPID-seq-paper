@@ -9,9 +9,11 @@ library(dplyr) # dataframe manipulation
 library(tidyverse) # transform data long/working form
 library(ggplot2) # plotting
 library(ggh4x) # ggplot2 extension for facet manipulation
+library(cowplot)
 # library(viridis) # color scale
 library(phyloseq) # phylogenetic tree
 library(readxl) # read excel files
+library(writexl) # write excel files
 # library(data.table) # manipulating matrices and tables
 # library(ggbeeswarm) # beeswarm
 # library(ggpubr) # add p-values to figures
@@ -19,7 +21,7 @@ library(readxl) # read excel files
 # library(factoextra) # PCA
 # library(MicrobiomeStat) # Diff abundance with LinDA
 # library(foreach) # Parallel and iterative processing
-# library(ggrepel) # ggplot2 text labels
+library(ggrepel) # ggplot2 text labels
 # library(scales) # scale labels
 # library(ggbreak) # break axes
 # library(Hmisc) # pearson correlation
@@ -35,11 +37,11 @@ library(readxl) # read excel files
 # Include custom functions
 ##########################
 
-setup_tables <- function(directory) {
+setup_tables <- function(directory, sample_sheet_path) {
   # Default Setup
   
   # import custom family colors
-  colors <- read_excel(paste0(directory, 'Family_colors.xlsx'), sheet = 1)
+  colors <- read_excel(paste0(paste0(here(), '/1-data/Family_colors.xlsx')), sheet = 2)
   colors$Color <- paste0("#", colors$Color)
   colors <- colors %>% mutate(fOTU = paste(Kingdom, Phylum, Class, Order, Family, sep=";"))
   colors <- colors %>% mutate(fOTU = factor(fOTU, levels = rev(unique(colors$fOTU)), ordered = TRUE))
@@ -63,7 +65,7 @@ setup_tables <- function(directory) {
   taxa <- as.matrix(taxa) # taxa must be matrix
   
   phy_tree <- read_tree(paste0(directory,'dsvs_msa.tree')) # read in phylogenetic tree
-  samdf <- read_excel(paste0(here(), '/1-data/Small-intestine-sample-data.xlsx'), sheet = 1) # Read in sample metadata
+  samdf <- read_excel(paste0(here(), sample_sheet_path), sheet = 1) # Read in sample metadata
   samdf <- as.data.frame(samdf) # convert to dataframe
   rownames(samdf) <- sub('sample_', '', samdf$Sample) # change row names to be the sequencing name, remove "sample_"
   samdf <- samdf[2:ncol(samdf)] # remove Sample column
@@ -76,6 +78,38 @@ setup_tables <- function(directory) {
   names(dna) <- taxa_names(ps)
   ps <- merge_phyloseq(ps, dna)
   taxa_names(ps) <- sprintf("feature_%04d", seq_len(ntaxa(ps)))
+  
+  return(list(ps = ps, taxa_order = taxa_order, samdf = samdf))
+}
+
+setup_tables2 <- function(directory, sample_sheet_path) {
+  
+  # import custom family colors
+  colors <- read_excel(paste0(paste0(here(), '/1-data/Family_colors.xlsx')), sheet = 2)
+  colors$Color <- paste0("#", colors$Color)
+  colors <- colors %>% mutate(fOTU = paste(Kingdom, Phylum, Class, Order, Family, sep=";"))
+  colors <- colors %>% mutate(fOTU = factor(fOTU, levels = rev(unique(colors$fOTU)), ordered = TRUE))
+  
+  seqtab_nochim <- read.table(paste0(directory,'dsvs.master.txt'), header = TRUE, row.names = 1, sep="\t", colClasses = rep("character", 6)) # read in ASV read counts
+  taxa <- read.table(paste0(directory,'feature_data.txt'), header = TRUE, sep = "\t") # read in ASV taxon info
+  taxa <- taxa %>% mutate(fOTU = paste(Kingdom, Phylum, Class, Order, Family, sep=";")) %>% # add fOTU
+    mutate(Taxon = mapply(generate_taxon, Kingdom, Phylum, Class, Order, Family, Genus, Species)) %>% # add concise taxonomy name to plot
+    mutate(Family2 = ifelse(is.na(Family) | Family == "f__", Taxon, Family)) %>% # add Family2 name to plot
+    left_join(colors %>% select(fOTU, Color), by = c("fOTU")) # add Family colors 
+  taxa_order <- taxa %>% arrange(match(fOTU, colors$fOTU)) # arrange taxa based on fOTU order in colors
+  rownames(taxa) <- taxa$Feature # row names must match species.names
+  taxa <- as.matrix(taxa) # taxa must be matrix
+  
+  seqtab_matrix <- as.matrix(seqtab_nochim)
+  mode(seqtab_matrix) <- "numeric"
+  
+  samdf <- read_excel(paste0(here(), sample_sheet_path), sheet = 2) # Read in sample metadata
+  samdf <- as.data.frame(samdf) # convert to dataframe
+  rownames(samdf) <- sub('sample_', '', samdf$Sample) # change row names to be the sequencing name, remove "sample_"
+  samdf <- samdf[2:ncol(samdf)] # remove Sample column
+  
+  # create phyloseq object
+  ps <- phyloseq(otu_table(seqtab_matrix, taxa_are_rows = FALSE), sample_data(samdf), tax_table(taxa))
   
   return(list(ps = ps, taxa_order = taxa_order, samdf = samdf))
 }
@@ -164,27 +198,27 @@ get_color_mapping <- function(df2plot){
 }
 
 # get_evals <- function(pcoa_out){
-  # function to get variance percentages
-  evals <- pcoa_out$values[,1]
-  var_exp <- 100 * evals/sum(evals)
-  return(list("evals" = evals, "variance_exp" = var_exp))
-}
+#   # function to get variance percentages
+#   evals <- pcoa_out$values[,1]
+#   var_exp <- 100 * evals/sum(evals)
+#   return(list("evals" = evals, "variance_exp" = var_exp))
+# }
 
-# split_sample <- function(sample_col) {
-  # after merging mice samples, fill in key information
-  split_vals <- str_split(sample_col, ';', simplify = TRUE)
-  list(
-    Project     = split_vals[,1],
-    Platform    = split_vals[,2],
-    Community   = split_vals[,3],
-    Pathogen    = split_vals[,4],
-    Diet        = split_vals[,5],
-    Mouse_no    = split_vals[,6],
-    Location    = split_vals[,7],
-    Donor       = split_vals[,8],
-    Mouse_breed = split_vals[,9]
-  )
-}
+# # split_sample <- function(sample_col) {
+#   # after merging mice samples, fill in key information
+#   split_vals <- str_split(sample_col, ';', simplify = TRUE)
+#   list(
+#     Project     = split_vals[,1],
+#     Platform    = split_vals[,2],
+#     Community   = split_vals[,3],
+#     Pathogen    = split_vals[,4],
+#     Diet        = split_vals[,5],
+#     Mouse_no    = split_vals[,6],
+#     Location    = split_vals[,7],
+#     Donor       = split_vals[,8],
+#     Mouse_breed = split_vals[,9]
+#   )
+# }
 
 theme_custom_comp <- function() {
   # Set default plotting method for composition in ggplot2
