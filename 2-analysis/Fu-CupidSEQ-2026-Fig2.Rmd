@@ -19,11 +19,41 @@ taxa_order <- output$taxa_order # ASV plot order
 samdf <- output$samdf # sample information
 samdf$Sample <- rownames(samdf)
 
+total_reads <- as.data.frame(sample_sums(ps)) # get total number of reads
+colnames(total_reads) <- "total_reads"
+total_reads$Sample <- rownames(total_reads)
+
+# Add read counts
+samdf <- samdf %>%
+  left_join(total_reads, by = "Sample") %>%
+  mutate(total_reads = ifelse(is.na(total_reads), 0, total_reads))
+
+# update samdf of phyloseq
+rownames(samdf) <- sub('sample_', '', samdf$Sample) # change row names to be the sequencing name, remove "sample_"
+samdf <- samdf %>%
+  select(-Sample) 
+sample_data(ps) <- sample_data(samdf)
+
 output2 <- setup_tables(paste0(here(), "/1-data/DADA2_HS/"), '/1-data/HS-sample-info.xlsx')
 ps2 <- output2$ps # phyloseq object
 taxa_order2 <- output2$taxa_order # ASV plot order
 samdf2 <- output2$samdf # sample information
 samdf2$Sample <- rownames(samdf2)
+
+total_reads <- as.data.frame(sample_sums(ps2)) # get total number of reads
+colnames(total_reads) <- "total_reads"
+total_reads$Sample <- rownames(total_reads)
+
+# update samdf of phyloseq
+#rownames(samdf2) <- sub('subsample_', '', samdf2$Sample) # change row names to be the sequencing name, remove "sample_"
+samdf2 <- samdf2 %>%
+  select(-Sample) 
+sample_data(ps2) <- sample_data(samdf2)
+
+# Add read counts
+# samdf2 <- samdf2 %>%
+#   left_join(total_reads, by = "Sample") %>%
+#   mutate(total_reads = ifelse(is.na(total_reads), 0, total_reads))
 
 cutoff_SI <- 0.001 # Supplementary Info ASV cutoff
 cutoff_MT <- 0.01 # Main Text ASV cutoff (to minimize legend)
@@ -35,7 +65,7 @@ cutoff_MT <- 0.01 # Main Text ASV cutoff (to minimize legend)
 
 ```{r Fig 2A}
 
-ps2plot <- ps
+ps2plot <- ps %>% subset_samples(total_reads > 1000)
 
 taxa2keep <- psmelt(ps2plot %>% transform_sample_counts(function(x) x/sum(x))) %>% # convert to relative abundance
   filter(Abundance > cutoff_SI) # identify taxa with relative abundances greater than cutoff
@@ -47,17 +77,18 @@ df2plot <- psmelt(ps2plot) # convert to long form
 df2plot <- set_family_order(df2plot, taxa_order) # set Family2 order
 
 transposed_df <- df2plot %>%
-                 group_by(No, PlateName, Feature) %>%
+                 group_by(No, Plate, Feature) %>%
+                 filter(n() > 1) %>%  # Drop groups with only 1 row
                  mutate(NovaSEQ = ifelse(Platform == "NovaSEQ", ifelse(is.na(Abundance) | Abundance < cutoff_SI, 
                                       -3, log10(Abundance)), NA),
                  MiSEQ = ifelse(Platform == "MiSEQ", ifelse(is.na(Abundance) | Abundance < cutoff_SI, 
                                       -3, log10(Abundance)), NA)) %>%
-                 select(No, PlateName, Feature, MiSEQ, NovaSEQ) %>%
+                 select(No, Plate, Feature, MiSEQ, NovaSEQ) %>%
                  summarise(
                       MiSEQ = pmax(max(MiSEQ, na.rm = TRUE), -3),
                       NovaSEQ = pmax(max(NovaSEQ, na.rm = TRUE), -3),
                       .groups = "drop"
-                 ) # Drop the grouping after summarization
+                 )
 
 transposed_df <- merge(transposed_df, taxa_order, by = "Feature")
 
@@ -76,7 +107,7 @@ g <- ggplot(transposed_df %>% filter(Feature == "feature_0002"), aes(x = MiSEQ, 
      annotate(
         "text",
         x = -3, y = -0.25,
-        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ p < .(round(correlation_result$p_value, 2))),
+        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(round(correlation_result$p_value, 2))),
         color = "red", size = 2, hjust = 0
      ) +
      force_panelsizes(rows =  unit(c(4, 4, 4, 4), "cm"),
@@ -91,6 +122,8 @@ g <- ggplot(transposed_df %>% filter(Feature == "feature_0002"), aes(x = MiSEQ, 
      coord_fixed()
 
 ggsave(paste0(directory, "Fig2/Fig2A.pdf"), plot = g, device = "pdf", width = 2, height = 2)
+
+
 ```
 
 #######################################
@@ -140,7 +173,7 @@ g <- ggplot(transposed_df %>% filter(Feature == "feature_0002"), aes(x = Phase1,
      annotate(
         "text",
         x = -3, y = -0.25,
-        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ p < .(round(correlation_result$p_value, 2))),
+        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(round(correlation_result$p_value, 2))),
         color = "red", size = 2, hjust = 0
      ) +
      force_panelsizes(rows =  unit(c(4, 4, 4, 4), "cm"),
@@ -180,7 +213,7 @@ g <- ggplot(df2plot, aes(x = log10(relAbundanceUnpooled), y = log10(relAbundance
      annotate(
         "text",
         x = -0.285, y = -0.025,
-        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ p < .(round(correlation_result$p_value, 2))),
+        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(round(correlation_result$p_value, 2))),
         color = "red", size = 2, hjust = 0
      ) +
      force_panelsizes(rows =  unit(c(4, 4, 4, 4), "cm"),

@@ -76,7 +76,7 @@ g <- ggplot(transposed_df, aes(x = EMP, y = DIP, color = Color)) +
      annotate(
         "text",
         x = -3, y = -0.25,
-        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ p < .(round(correlation_result$p_value, 2))),
+        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(round(correlation_result$p_value, 2))),
         color = "red", size = 2, hjust = 0
      ) +
      force_panelsizes(rows =  unit(c(4, 4, 4, 4), "cm"),
@@ -316,7 +316,7 @@ g <- ggplot(transposed_df, aes(x = EMP, y = DIP, color = Color)) +
      annotate(
         "text",
         x = -3, y = -0.25,
-        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ p < .(round(correlation_result$p_value, 2))),
+        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(round(correlation_result$p_value, 2))),
         color = "red", size = 2, hjust = 0
      ) +
      force_panelsizes(rows =  unit(c(4, 4, 4, 4), "cm"),
@@ -520,7 +520,7 @@ ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>% # keep ASVs in taxa2keep
   transform_sample_counts(function(x) x/sum(x)) # renormalize
 
 df2plot <- psmelt(ps2plot) %>% # convert to long form
-  mutate(PCR = factor(PCR, levels = c("EMP", "CUPID-Seq", "Full"), ordered = TRUE))
+  mutate(PCR = factor(PCR, levels = c("EMP", "CUPID-seq", "Full"), ordered = TRUE))
 df2plot <- set_family_order(df2plot, taxa_order2) # set Family2 order
 
 family2_scale <- get_color_mapping(df2plot) # legend colors
