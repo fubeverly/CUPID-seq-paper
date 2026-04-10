@@ -3,7 +3,7 @@ title: "CUPID-SEQ Fig 2 FINAL"
 output: html_notebook
 ---
 
-The following script includes analysis for XX.
+The following script includes analysis for validating the CUPID-seq protocol.
 
 Beverly Fu
 

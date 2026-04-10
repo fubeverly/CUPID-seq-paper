@@ -3,7 +3,7 @@ title: "CUPID-SEQ Fig 3 FINAL"
 output: html_notebook
 ---
 
-The following script includes analysis for XX.
+The following script includes analysis for examining the amplification bias between EMP and CUPID-seq protocols.
 
 Beverly Fu
 
@@ -335,8 +335,6 @@ g <- ggplot(transposed_df, aes(x = EMP, y = DIP, color = Color)) +
 
 ggsave(paste0(directory, "Fig3/Fig3B.pdf"), plot = g, device = "pdf", width = 2, height = 2)
 
-
-
 correlation_result1 <- transposed_df %>%
   filter(!(EMP == -3 & DIP == -3)) %>%
   group_by(Family2) %>%
@@ -359,10 +357,7 @@ correlation_result1 <- transposed_df %>%
     .groups = "drop"
   )
 
-
 correlation_result1
-
-
 
 ggsave(paste0(directory, "Fig3/Fig3B.pdf"), plot = g, device = "pdf", width = 2, height = 2)
 ```
