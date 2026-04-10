@@ -76,7 +76,7 @@ g <- ggplot(transposed_df, aes(x = EMP, y = DIP, color = Color)) +
      annotate(
         "text",
         x = -3, y = -0.25,
-        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(round(correlation_result$p_value, 2))),
+        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(sprintf("%.2e", correlation_result$p_value))),
         color = "red", size = 2, hjust = 0
      ) +
      force_panelsizes(rows =  unit(c(4, 4, 4, 4), "cm"),
@@ -243,6 +243,8 @@ ggsave(paste0(directory, "FigS2/FigS2A.pdf"), plot = g, device = "pdf", width = 
 
 ```{r Fig 3B}
 
+# Need to run S3A section
+
 ps2plot <- ps %>% subset_samples(!Phase %in% c("L2", "L3") # only one set of DIP
                               & !Well %in% c("F01", "H01", "H12")) # remove blanks
 
@@ -316,7 +318,7 @@ g <- ggplot(transposed_df, aes(x = EMP, y = DIP, color = Color)) +
      annotate(
         "text",
         x = -3, y = -0.25,
-        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(round(correlation_result$p_value, 2))),
+        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(sprintf("%.2e", correlation_result$p_value))),
         color = "red", size = 2, hjust = 0
      ) +
      force_panelsizes(rows =  unit(c(4, 4, 4, 4), "cm"),

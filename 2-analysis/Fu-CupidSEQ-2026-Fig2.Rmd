@@ -45,15 +45,9 @@ colnames(total_reads) <- "total_reads"
 total_reads$Sample <- rownames(total_reads)
 
 # update samdf of phyloseq
-#rownames(samdf2) <- sub('subsample_', '', samdf2$Sample) # change row names to be the sequencing name, remove "sample_"
 samdf2 <- samdf2 %>%
   select(-Sample) 
 sample_data(ps2) <- sample_data(samdf2)
-
-# Add read counts
-# samdf2 <- samdf2 %>%
-#   left_join(total_reads, by = "Sample") %>%
-#   mutate(total_reads = ifelse(is.na(total_reads), 0, total_reads))
 
 cutoff_SI <- 0.001 # Supplementary Info ASV cutoff
 cutoff_MT <- 0.01 # Main Text ASV cutoff (to minimize legend)
@@ -107,7 +101,7 @@ g <- ggplot(transposed_df %>% filter(Feature == "feature_0002"), aes(x = MiSEQ, 
      annotate(
         "text",
         x = -3, y = -0.25,
-        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(round(correlation_result$p_value, 2))),
+        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(sprintf("%.2e", correlation_result$p_value))),
         color = "red", size = 2, hjust = 0
      ) +
      force_panelsizes(rows =  unit(c(4, 4, 4, 4), "cm"),
@@ -173,7 +167,7 @@ g <- ggplot(transposed_df %>% filter(Feature == "feature_0002"), aes(x = Phase1,
      annotate(
         "text",
         x = -3, y = -0.25,
-        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(round(correlation_result$p_value, 2))),
+        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(sprintf("%.2e", correlation_result$p_value))),
         color = "red", size = 2, hjust = 0
      ) +
      force_panelsizes(rows =  unit(c(4, 4, 4, 4), "cm"),
@@ -196,24 +190,23 @@ ggsave(paste0(directory, "Fig2/Fig2B.pdf"), plot = g, device = "pdf", width = 2,
 
 ```{r Fig 2C}
 
-df2plot <- read.table(paste0(here(), '/1-data/Pool-vs-unpool.txt'), header = TRUE, sep=" ")
+df2plot <- read.table(paste0(here(), '/1-data/Pool-vs-unpool.txt'), header = TRUE, sep=" ") %>%
+   filter(unpooled > 0 & pooled > 0)
 
 correlation_result <- df2plot %>%
- # filter(Feature == "feature_0002") %>%
   summarize(
-    cor_value = cor(log10(relAbundanceUnpooled), log10(relAbundancePooled), method = "pearson"),  # Pearson correlation coefficient
-    p_value = cor.test(log10(relAbundanceUnpooled), log10(relAbundancePooled), method = "pearson")$p.value,  # Extract p-value
+    cor_value = cor(log10(unpooled), log10(pooled), method = "pearson"),  # Pearson correlation coefficient
+    p_value = cor.test(log10(unpooled), log10(pooled), method = "pearson")$p.value,  # Extract p-value
     .groups = "drop")
 
 correlation_result
 
-g <- ggplot(df2plot, aes(x = log10(relAbundanceUnpooled), y = log10(relAbundancePooled))) +
+g <- ggplot(df2plot, aes(x = log10(unpooled), y = log10(pooled))) +
      geom_point(shape = 16, size = 1, color = "#CCCCCC", stroke = 0.2, alpha = 0.5) +  # Fill color for the points
-     geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red", size = 0.3) +  # Add y = x line
-     annotate(
-        "text",
-        x = -0.285, y = -0.025,
-        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(round(correlation_result$p_value, 2))),
+     geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red", linewidth = 0.3) +  # Add y = x line
+     annotate("text",
+        x = -3, y = -0.25,
+        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(sprintf("%.2e", correlation_result$p_value))),
         color = "red", size = 2, hjust = 0
      ) +
      force_panelsizes(rows =  unit(c(4, 4, 4, 4), "cm"),
@@ -223,7 +216,7 @@ g <- ggplot(df2plot, aes(x = log10(relAbundanceUnpooled), y = log10(relAbundance
      theme(panel.grid.major = element_blank(),      # Remove major grid lines
            panel.grid.minor = element_blank()) +     # Remove minor grid lines
      theme_custom_text() +
-     coord_fixed()
+     coord_fixed(xlim = c(-3, 0), ylim = c(-3, 0))  # Set limits for both axes
 
 ggsave(paste0(directory, "Fig2/Fig2C.pdf"), plot = g, device = "pdf", width = 2, height = 2)
 ```
