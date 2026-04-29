@@ -16,6 +16,4 @@ Description of folders:
 - The **2-analysis** directory includes scripts for all figures. In-text analyses referenced in the paper are also located within the figure scripts in chronological order.
 - The **3-figures** directory includes the subpanels and supplementary tables.
 
-Sequencing data is available on NCBI Sequencing Read Archive under [Project XXXXXX](https://www.ncbi.nlm.nih.gov/bioproject/PRJNAXXXXXX).
-
 Questions can be directed to Beverly Fu (bevfu@stanford.edu), KC Huang (kchuang@stanford.edu), or Katherine Xue (k.xue@uci.edu).
