@@ -4,7 +4,11 @@ Repository accompanying the manuscript "CUPID-seq enables highly multiplexed amp
 ## Description
 This repository includes data and replication files to reproduce the analyses in the manuscript:
 
-Beverly Fu, Rachel L. Porter*, Handuo Shi*, Achuthan Ambat, David A. Relman, Kerwyn Casey Huang, Katherine S. Xue. "CUPID-seq enables highly multiplexed amplicon sequencing via combinatorial in-line dual indexing", TBD.
+Beverly Fu, Rachel L. Porter*, Handuo Shi*, Achuthan Ambat, David A. Relman, Kerwyn Casey Huang†, Katherine S. Xue†. "CUPID-seq enables highly multiplexed amplicon sequencing via combinatorial in-line dual indexing", TBD.
+
+*: These authors contributed equally to this work.
+
+†: Co-corresponding authors.
 
 Description of folders:
 - The configuration **0-config.R** file lists all R packages that need to be installed prior to running the code. It also contains custom functions.
