@@ -192,14 +192,29 @@ theme_custom_comp <- function() {
   )
 }
 
+theme_custom_comp <- function() {
+  # Set default plotting method for composition in ggplot2
+  theme(
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(), 
+    axis.ticks.x = element_blank(),
+    panel.background = element_blank(),
+    axis.text.y = element_text(margin = margin(r = 0.5)),
+    legend.position = "none", # no legend
+  )
+}
+
 theme_custom_text <- function() {
   # set all fontsizes to be 6 and black
   theme(
     legend.text = element_text(size = 6, color = "black"),
     legend.title = element_text(size = 6, color = "black"), 
     axis.text = element_text(size = 6, color = "black"),    
-    axis.title = element_text(size = 6, color = "black"),   
+    axis.title = element_text(size = 7, color = "black"),   
     plot.title = element_text(size = 6, color = "black"),   
-    strip.text = element_text(size = 6, color = "black")
+    strip.text = element_text(size = 6, color = "black"),
+    axis.ticks = element_line(color = "black", linewidth = 0.25),
+    panel.grid.major = element_line(linewidth = 0.25)
   )
 }

@@ -3,7 +3,7 @@ title: "CUPID-SEQ Fig 3 FINAL"
 output: html_notebook
 ---
 
-The following script includes analysis for examining the amplification bias between EMP and CUPID-seq protocols.
+The following script includes analysis for validating the CUPID-seq protocol.
 
 Beverly Fu
 
@@ -13,65 +13,156 @@ source(paste0(here::here(), "/0-config.R"))
 
 directory = paste0(here(), "/3-figures/")
 
-output <- setup_tables(paste0(here(), "/1-data/DADA2_HS/"), '/1-data/HS-sample-info.xlsx')
+output <- setup_tables(paste0(here(), "/1-data/DADA2_BF/"), '/1-data/BF-sample-info.xlsx')
 ps <- output$ps # phyloseq object
 taxa_order <- output$taxa_order # ASV plot order
 samdf <- output$samdf # sample information
 samdf$Sample <- rownames(samdf)
 
-output2 <- setup_tables2(paste0(here(), "/1-data/DADA2_Long-read/"), '/1-data/HS-sample-info.xlsx')
+total_reads <- as.data.frame(sample_sums(ps)) # get total number of reads
+colnames(total_reads) <- "total_reads"
+total_reads$Sample <- rownames(total_reads)
+
+# Add read counts
+samdf <- samdf %>%
+  left_join(total_reads, by = "Sample") %>%
+  mutate(total_reads = ifelse(is.na(total_reads), 0, total_reads))
+
+# update samdf of phyloseq
+rownames(samdf) <- sub('sample_', '', samdf$Sample) # change row names to be the sequencing name, remove "sample_"
+samdf <- samdf %>%
+  select(-Sample) 
+sample_data(ps) <- sample_data(samdf)
+
+output2 <- setup_tables(paste0(here(), "/1-data/DADA2_HS/"), '/1-data/HS-sample-info.xlsx')
 ps2 <- output2$ps # phyloseq object
 taxa_order2 <- output2$taxa_order # ASV plot order
 samdf2 <- output2$samdf # sample information
 samdf2$Sample <- rownames(samdf2)
 
-cutoff_SI <- 0.001 # Supplementary Info ASV cutoff_SI
-cutoff_MT <- 0.01 # Main Text ASV cutoff_SI (to minimize legend)
+total_reads <- as.data.frame(sample_sums(ps2)) # get total number of reads
+colnames(total_reads) <- "total_reads"
+total_reads$Sample <- rownames(total_reads)
+
+# update samdf of phyloseq
+samdf2 <- samdf2 %>%
+  select(-Sample) 
+sample_data(ps2) <- sample_data(samdf2)
+
+cutoff_SI <- 0.001 # Supplementary Info ASV cutoff
+cutoff_MT <- 0.01 # Main Text ASV cutoff (to minimize legend)
 ```
 
 #######################################
-# Fig. 3A: ASV relative abundance of EMP vs CUPID-Seq
+# Fig. 3A: Comparison of sequencing platform
 #######################################
 
 ```{r Fig 3A}
-ps2plot <- ps %>% subset_samples(!Phase %in% c("L2", "L3") # only one plate of DIP
+
+ps2plot <- ps %>% subset_samples(total_reads > 1000)
+
+taxa2keep <- psmelt(ps2plot %>% transform_sample_counts(function(x) x/sum(x))) %>% # convert to relative abundance
+  filter(Abundance > cutoff_SI) # identify taxa with relative abundances greater than cutoff
+
+ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>% # keep ASVs in taxa2keep
+  transform_sample_counts(function(x) x/sum(x)) # renormalize
+
+df2plot <- psmelt(ps2plot) # convert to long form
+df2plot <- set_family_order(df2plot, taxa_order) # set Family2 order
+
+transposed_df <- df2plot %>%
+                 group_by(No, Plate, Feature) %>%
+                 filter(n() > 1) %>%  # Drop groups with only 1 row
+                 mutate(NovaSEQ = ifelse(Platform == "NovaSEQ", ifelse(is.na(Abundance) | Abundance < cutoff_SI, 
+                                      -3, log10(Abundance)), NA),
+                 MiSEQ = ifelse(Platform == "MiSEQ", ifelse(is.na(Abundance) | Abundance < cutoff_SI, 
+                                      -3, log10(Abundance)), NA)) %>%
+                 select(No, Plate, Feature, MiSEQ, NovaSEQ) %>%
+                 summarise(
+                      MiSEQ = pmax(max(MiSEQ, na.rm = TRUE), -3),
+                      NovaSEQ = pmax(max(NovaSEQ, na.rm = TRUE), -3),
+                      .groups = "drop"
+                 )
+
+transposed_df <- merge(transposed_df, taxa_order, by = "Feature")
+
+correlation_result <- transposed_df %>% 
+  filter(Feature == "feature_0002") %>%
+  summarize(
+    cor_value = cor(MiSEQ, NovaSEQ, method = "pearson"),  # Pearson correlation coefficient
+    p_value = cor.test(MiSEQ, NovaSEQ, method = "pearson")$p.value,  # Extract p-value
+    .groups = "drop")
+
+correlation_result
+
+g <- ggplot(transposed_df %>% filter(Feature == "feature_0002"), aes(x = MiSEQ, y = NovaSEQ)) +
+     geom_point(shape = 16, size = 1, color = "#CCCCCC", stroke = 0.2, alpha = 0.5) +  # Fill color for the points
+     geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red", linewidth = 0.3) +  # Add y = x line
+     annotate(
+        "text",
+        x = -3, y = -0.25,
+        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(sprintf("%.2e", correlation_result$p_value))),
+        color = "red", size = 2, hjust = 0
+     ) +
+     force_panelsizes(rows =  unit(c(4, 4, 4, 4), "cm"),
+                      cols = unit(c(4, 4, 4, 4), "cm"), TRUE) +
+     scale_y_continuous(breaks = c(0, -1, -2, -3, -4), limits = c(-3, 0)) + 
+     scale_x_continuous(limits = c(-3, 0)) +
+     labs(x = expression(log[10]*"(MiSeq rel. abund.)"), y = expression(log[10]*"(NovaSeq ASV rel. abund.)")) +
+     theme_bw() +
+     theme_custom_text() +
+     theme(panel.grid.major = element_blank(),      # Remove major grid lines
+           panel.grid.minor = element_blank()) +     # Remove minor grid lines
+     coord_fixed()
+
+ggsave(paste0(directory, "Fig3/Fig3A.pdf"), plot = g, device = "pdf", width = 2, height = 2)
+
+
+```
+
+#######################################
+# Fig. 3B: Comparison of phases
+#######################################
+
+```{r Fig 3B}
+ps2plot <- ps2 %>% subset_samples(Platform == "NovaSeq"
                               & !Well %in% c("F01", "H01", "H12")) # remove blanks
 
 taxa2keep <- psmelt(ps2plot %>% transform_sample_counts(function(x) x/sum(x))) %>% # convert to relative abundance
   filter(Abundance > cutoff_SI)
 
 ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>%  # keep ASVs in taxa2keep
-  transform_sample_counts(function(x) x/sum(x)) # renormalize
+  transform_sample_counts(function(x) x/sum(x)) # renomalize
 
 df2plot <- psmelt(ps2plot) # convert to long form
-df2plot <- set_family_order(df2plot, taxa_order) # set Family2 order
+df2plot <- set_family_order(df2plot, taxa_order2) # set Family2 order
 
 transposed_df <- df2plot %>%
                  group_by(Subject, Well, Feature) %>%
-                 mutate(EMP = ifelse(PCR == "EMP", ifelse(is.na(Abundance) | Abundance < cutoff_SI, 
+                 mutate(Phase1 = ifelse(Phase %in% c("L0", "L1"), ifelse(is.na(Abundance) | Abundance < cutoff_SI, 
                                       -3, log10(Abundance)), NA),
-                 DIP = ifelse(PCR == "DIP", ifelse(is.na(Abundance) | Abundance < cutoff_SI, 
+                 Phase2 = ifelse(Phase %in% c("L2", "L3"), ifelse(is.na(Abundance) | Abundance < cutoff_SI, 
                                       -3, log10(Abundance)), NA)) %>%
-                 select(Subject, Well, Feature, EMP, DIP) %>%
+                 select(Subject, Well, Feature, Phase1, Phase2) %>%
                  summarise(
-                      EMP = pmax(max(EMP, na.rm = TRUE), -3),
-                      DIP = pmax(max(DIP, na.rm = TRUE), -3),
+                      Phase1 = pmax(max(Phase1, na.rm = TRUE), -3),
+                      Phase2 = pmax(max(Phase2, na.rm = TRUE), -3),
                       .groups = "drop"
                  ) # Drop the grouping after summarization
-
+            
 transposed_df <- merge(transposed_df, taxa_order, by = "Feature")
 
 correlation_result <- transposed_df %>%
+  filter(Feature == "feature_0002") %>%
   summarize(
-    cor_value = cor(EMP, DIP, method = "pearson"),  # Pearson correlation coefficient
-    p_value = cor.test(EMP, DIP, method = "pearson")$p.value,  # Extract p-value
+    cor_value = cor(Phase1, Phase2, method = "pearson"),  # Pearson correlation coefficient
+    p_value = cor.test(Phase1, Phase2, method = "pearson")$p.value,  # Extract p-value
     .groups = "drop")
 
 correlation_result
 
-g <- ggplot(transposed_df, aes(x = EMP, y = DIP, color = Color)) +
-     geom_point(shape = 16, size = 1, stroke = 0.2, alpha = 0.5) +  # Fill color for the points
-     scale_color_identity() +
+g <- ggplot(transposed_df %>% filter(Feature == "feature_0002"), aes(x = Phase1, y = Phase2)) +
+     geom_point(shape = 16, size = 1, color = "#CCCCCC", stroke = 0.2, alpha = 0.5) +  # Fill color for the points
      geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red", size = 0.3) +  # Add y = x line
      annotate(
         "text",
@@ -83,477 +174,50 @@ g <- ggplot(transposed_df, aes(x = EMP, y = DIP, color = Color)) +
                       cols = unit(c(4, 4, 4, 4), "cm"), TRUE) +
      scale_y_continuous(breaks = c(0, -1, -2, -3, -4), limits = c(-3, 0)) + 
      scale_x_continuous(limits = c(-3, 0)) +
-     labs(x = "log10(EMP ASV rel. abund.)", y = "log10(CUPID-seq ASV rel. abund.)") +
+     labs(x = expression(log[10]*"(Phase 1 ASV rel. abund.)"), y = expression(log[10]*"(Phase 2 ASV rel. abund.)")) +
      theme_bw() +
-     theme(legend.position = "none",
-           panel.grid.major = element_blank(),      # Remove major grid lines
-           panel.grid.minor = element_blank()) +     # Remove minor grid lines
      theme_custom_text() +
-     coord_fixed()
-
-ggsave(paste0(directory, "Fig3/Fig3A.pdf"), plot = g, device = "pdf", width = 2, height = 2)
-```
-
-#######################################
-# Fig. S1A: ASV relative abundance of EMP vs CUPID-Seq, broken down by family
-#######################################
-
-```{r Fig S1}
-
-g <- ggplot(transposed_df, aes(x = EMP, y = DIP, fill = Color)) +
-     geom_point(shape = 21, size = 1, stroke = 0.2, alpha = 0.5, color = "black") +  # Fill color for the points
-     scale_fill_identity() +
-     geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red", size = 0.3) +  # Add y = x line
-     facet_wrap(~Family2, labeller = labeller(Family2 = function(x) gsub("^f__", "", x))) +
-     force_panelsizes(rows =  unit(c(2, 2, 2, 2), "cm"),
-                      cols = unit(c(2, 2, 2, 2), "cm"), TRUE) +
-     scale_y_continuous(breaks = c(0, -1, -2, -3, -4), limits = c(-3, 0)) + 
-     scale_x_continuous(limits = c(-3, 0)) +
-     labs(x = "log10(EMP ASV rel. abund.)", y = "log10(CUPID-seq ASV rel. abund.)") +
-     theme_bw() +
-     theme(legend.position = "none",
-           panel.grid.major = element_blank(),      # Remove major grid lines
+     theme(panel.grid.major = element_blank(),      # Remove major grid lines
            panel.grid.minor = element_blank()) +     # Remove minor grid lines
-     theme_custom_text() +
-     coord_fixed()
-
-ggsave(paste0(directory, "FigS1/FigS1A.pdf"), plot = g, device = "pdf", width = 6, height = 6)
-
-```
-
-#######################################
-# Table S1A: Correlation of families
-#######################################
-
-```{r Table S1}
-
-correlation_result1 <- transposed_df %>%
-  filter(!(EMP == -3 & DIP == -3)) %>%
-  group_by(Family2) %>%
-  summarize(
-    n = sum(complete.cases(EMP, DIP)),
-    cor_value = if (n < 3 ||
-                    sd(EMP, na.rm = TRUE) == 0 ||
-                    sd(DIP, na.rm = TRUE) == 0) {
-      NA_real_
-    } else {
-      cor(EMP, DIP, method = "pearson", use = "complete.obs")
-    },
-    p_value = if (n < 3 ||
-                  sd(EMP, na.rm = TRUE) == 0 ||
-                  sd(DIP, na.rm = TRUE) == 0) {
-      NA_real_
-    } else {
-      cor.test(EMP, DIP, method = "pearson")$p.value
-    },
-    .groups = "drop"
-  )
-
-correlation_result1
-
-write_xlsx(correlation_result1, paste0(here(), "/1-data/TableS1.xlsx"))
-```
-
-#######################################
-# Fig. S3A: Calculating median fold change per family
-#######################################
-
-```{r Fig S3A}
-
-ps2plot <- ps %>% subset_samples(!Phase %in% c("L2", "L3") # only one set of DIP
-                              & !Well %in% c("F01", "H01", "H12")) # remove blanks
-
-taxa2keep <- psmelt(ps2plot %>% transform_sample_counts(function(x) x/sum(x))) %>% # convert to relative abundance
-  filter(Abundance > cutoff_SI) #
-
-ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>%  # keep ASVs in taxa2keep
-  transform_sample_counts(function(x) x/sum(x)) # renormalize
-
-df2plot <- psmelt(ps2plot) # convert to long form
-df2plot <- set_family_order(df2plot, taxa_order) # set Family2 order
-
-fold_changes <- df2plot %>%
-  select(Subject, Well) %>%
-  distinct() %>%        # keeps only unique rows
-  group_by(Subject, Well)
-
-for (fam in unique(df2plot$Family2)) {
-  transposed_df <- df2plot %>%
-    filter(Family2 == fam) %>%
-    group_by(Subject, Well, PCR) %>%
-    summarise(Total_Abundance = sum(Abundance, na.rm = TRUE))
-  
-  transposed_df <- transposed_df %>%
-                 group_by(Subject, Well) %>%
-                 mutate(EMP = ifelse(PCR == "EMP", ifelse(is.na(Total_Abundance) | Total_Abundance < cutoff_SI, 
-                                      cutoff_SI, Total_Abundance), NA),
-                 DIP = ifelse(PCR == "DIP", ifelse(is.na(Total_Abundance) | Total_Abundance < cutoff_SI, 
-                                      cutoff_SI, Total_Abundance), NA)) %>%
-                 select(Subject, Well, EMP, DIP) %>%
-                 summarise(
-                    EMP = max(EMP, na.rm = TRUE),
-                    DIP = max(DIP, na.rm = TRUE),
-                    .groups = 'drop') # Drop the grouping after summarization
-
-  transposed_df <- transposed_df %>% mutate(!!fam := DIP / EMP)
-  transposed_df <- transposed_df %>%
-    mutate(!!fam := if_else(EMP != cutoff_SI & DIP != cutoff_SI, !!sym(fam), NA_real_))
-  
-  fold_changes = merge(fold_changes, transposed_df[, c("Subject", "Well", fam)],, by = c("Subject", "Well"))
-}
-
-fold_changes_long <- fold_changes %>%
-  pivot_longer(
-    cols = -c(Subject, Well),  # all columns except Subject and Well
-    names_to = "Family",       # column to hold the original column names
-    values_to = "Value"        # column to hold the values
-  )
-
-fold_changes_long <- merge(fold_changes_long, unique(taxa_order %>% select("Family2", "Color")), by.x = "Family", by.y = "Family2")
-
-# Compute median per Family
-medians <- fold_changes_long %>%
-  group_by(Family, Color) %>%
-  summarise(median_value = median(Value, na.rm = TRUE))
-
-g <- ggplot(fold_changes_long, aes(x = Value, fill = Color)) + 
-      geom_histogram(bins = 25, color = "black", linewidth = 0.2) +
-      scale_y_continuous(breaks = c(0, 40, 80, 120, 160)) +
-      facet_wrap(~Family, labeller = labeller(Family = function(x) gsub("^f__", "", x))) +
-      scale_fill_identity() +
-      geom_vline(data = medians, aes(xintercept = median_value), linetype = "dashed", color = "red", size = 0.3) +
-      geom_text(
-          data = medians,
-          aes(x = median_value + 1, y = 100, label = paste0("med = ", round(median_value, 2))),
-          color = "red", size = 2, hjust = 0
-          ) +
-      labs(x = "Fold change of ASVs by family", y = "Counts") +
-      theme_bw() +
-         theme(legend.position = "none",
-               panel.grid.major = element_blank(),      # Remove major grid lines
-               panel.grid.minor = element_blank()) +     # Remove minor grid lines
-      theme_custom_text()
-
-ggsave(paste0(directory, "FigS2/FigS2A.pdf"), plot = g, device = "pdf", width = 6, height = 4)
-```
-
-#######################################
-# Fig. S3B: Normalization
-#######################################
-
-```{r Fig 3B}
-
-# Need to run S3A section
-
-ps2plot <- ps %>% subset_samples(!Phase %in% c("L2", "L3") # only one set of DIP
-                              & !Well %in% c("F01", "H01", "H12")) # remove blanks
-
-taxa2keep <- psmelt(ps2plot %>% transform_sample_counts(function(x) x/sum(x))) %>% # convert to relative abundance
-  filter(Abundance > cutoff_SI) #
-
-ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>%  # keep ASVs in taxa2keep
-  transform_sample_counts(function(x) x/sum(x)) # renormalize
-
-ps_long <- psmelt(ps2plot)
-
-# Rescale abundances conditionally
-ps_long <- ps_long %>%
-  left_join(medians, by = c("Family2" = "Family")) %>%  # add median_value per Family2
-  mutate(Abundance = if_else(
-    PCR == "DIP" & !is.na(median_value),
-    Abundance / median_value,   # divide by family median
-    Abundance                   # otherwise keep original
-  )) 
-
-# Convert back to phyloseq object
-# Keep OTU table, sample data, taxonomy
-otu_new <- ps_long %>%
-  select(Sample, OTU, Abundance) %>%
-  pivot_wider(
-    names_from = Sample, 
-    values_from = Abundance, 
-    values_fill = 0
-  ) %>%
-  column_to_rownames("OTU") %>%
-  as.matrix()  # MUST be a matrix for phyloseq
-
-# Replace OTU table in phyloseq object
-otu_table(ps2plot) <- otu_table(otu_new, taxa_are_rows = TRUE)
-
-
-ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>%  # keep ASVs in taxa2keep
-  transform_sample_counts(function(x) x/sum(x)) # renormalize
-
-df2plot <- psmelt(ps2plot) # convert to long form
-df2plot <- set_family_order(df2plot, taxa_order) # set Family2 order
-
-transposed_df <- df2plot %>%
-                 group_by(Subject, Well, Feature) %>%
-                 mutate(EMP = ifelse(PCR == "EMP", ifelse(is.na(Abundance) | Abundance < cutoff_SI, 
-                                      -3, log10(Abundance)), NA),
-                 DIP = ifelse(PCR == "DIP", ifelse(is.na(Abundance) | Abundance < cutoff_SI, 
-                                      -3, log10(Abundance)), NA)) %>%
-                 select(Subject, Well, Feature, EMP, DIP) %>%
-                 summarise(
-                    EMP = max(EMP, na.rm = TRUE),
-                    DIP = max(DIP, na.rm = TRUE),
-                    .groups = 'drop') # Drop the grouping after summarization
-
-transposed_df <- merge(transposed_df, taxa_order, by = "Feature")
-
-family2_scale <- get_color_mapping(transposed_df) # legend colors
-
-correlation_result <- transposed_df %>%
-  summarize(
-    cor_value = cor(EMP, DIP, method = "pearson"),  # Pearson correlation coefficient
-    p_value = cor.test(EMP, DIP, method = "pearson")$p.value,  # Extract p-value
-    .groups = "drop")
-
-correlation_result
-
-g <- ggplot(transposed_df, aes(x = EMP, y = DIP, color = Color)) +
-     geom_point(shape = 16, size = 1, stroke = 0.2, alpha = 0.5) +  # Fill color for the points
-     scale_color_identity() +
-     geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red", size = 0.3) +  # Add y = x line
-     annotate(
-        "text",
-        x = -3, y = -0.25,
-        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(sprintf("%.2e", correlation_result$p_value))),
-        color = "red", size = 2, hjust = 0
-     ) +
-     force_panelsizes(rows =  unit(c(4, 4, 4, 4), "cm"),
-                      cols = unit(c(4, 4, 4, 4), "cm"), TRUE) +
-     scale_y_continuous(breaks = c(0, -1, -2, -3, -4), limits = c(-3, 0)) + 
-     scale_x_continuous(limits = c(-3, 0)) +
-     labs(x = "log10(EMP ASV rel. abund.)", y = "log10(CUPID-seq ASV rel. abund.)") +
-     theme_bw() +
-     theme(legend.position = "none",
-           panel.grid.major = element_blank(),      # Remove major grid lines
-           panel.grid.minor = element_blank()) +     # Remove minor grid lines
-     theme_custom_text() +
      coord_fixed()
 
 ggsave(paste0(directory, "Fig3/Fig3B.pdf"), plot = g, device = "pdf", width = 2, height = 2)
-
-correlation_result1 <- transposed_df %>%
-  filter(!(EMP == -3 & DIP == -3)) %>%
-  group_by(Family2) %>%
-  summarize(
-    n = sum(complete.cases(EMP, DIP)),
-    cor_value = if (n < 3 ||
-                    sd(EMP, na.rm = TRUE) == 0 ||
-                    sd(DIP, na.rm = TRUE) == 0) {
-      NA_real_
-    } else {
-      cor(EMP, DIP, method = "pearson", use = "complete.obs")
-    },
-    p_value = if (n < 3 ||
-                  sd(EMP, na.rm = TRUE) == 0 ||
-                  sd(DIP, na.rm = TRUE) == 0) {
-      NA_real_
-    } else {
-      cor.test(EMP, DIP, method = "pearson")$p.value
-    },
-    .groups = "drop"
-  )
-
-correlation_result1
-
-ggsave(paste0(directory, "Fig3/Fig3B.pdf"), plot = g, device = "pdf", width = 2, height = 2)
-```
-
-```{r Fig S2B}
-
-g <- ggplot(transposed_df, aes(x = EMP, y = DIP, fill = Color)) +
-     geom_point(shape = 21, size = 1, stroke = 0.2, alpha = 0.5, color = "black") +  # Fill color for the points
-     scale_fill_identity() +
-     geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red", size = 0.3) +  # Add y = x line
-     facet_wrap(~Family2, labeller = labeller(Family2 = function(x) gsub("^f__", "", x))) +
-     force_panelsizes(rows =  unit(c(2, 2, 2, 2), "cm"),
-                      cols = unit(c(2, 2, 2, 2), "cm"), TRUE) +
-     scale_y_continuous(breaks = c(0, -1, -2, -3, -4), limits = c(-3, 0)) + 
-     scale_x_continuous(limits = c(-3, 0)) +
-     labs(x = "log10(EMP ASV rel. abund.)", y = "log10(CUPID-seq ASV rel. abund.)") +
-     theme_bw() +
-     theme(legend.position = "none",
-           panel.grid.major = element_blank(),      # Remove major grid lines
-           panel.grid.minor = element_blank()) +     # Remove minor grid lines
-     theme_custom_text() +
-     coord_fixed()
-
-ggsave(paste0(directory, "FigS2/FigS2B.pdf"), plot = g, device = "pdf", width = 6, height = 6)
-
-```
-
-```{r Table S2}
-
-correlation_result2 <- transposed_df %>%
-  filter(!(EMP == -3 & DIP == -3)) %>%
-  group_by(Family2) %>%
-  summarize(
-    n = sum(complete.cases(EMP, DIP)),
-    cor_value = if (n < 3 ||
-                    sd(EMP, na.rm = TRUE) == 0 ||
-                    sd(DIP, na.rm = TRUE) == 0) {
-      NA_real_
-    } else {
-      cor(EMP, DIP, method = "pearson", use = "complete.obs")
-    },
-    p_value = if (n < 3 ||
-                  sd(EMP, na.rm = TRUE) == 0 ||
-                  sd(DIP, na.rm = TRUE) == 0) {
-      NA_real_
-    } else {
-      cor.test(EMP, DIP, method = "pearson")$p.value
-    },
-    .groups = "drop"
-  )
-
-correlation_result2
-
-write_xlsx(correlation_result2, paste0(here(), "/1-data/TableS2.xlsx"))
 ```
 
 #######################################
-# Fig. 3C: Bray-Curtis distance
+# Fig. 3C: Comparison of pooling
 #######################################
 
 ```{r Fig 3C}
 
-ps2plot <- ps %>% subset_samples(!Well %in% c("F01", "H01", "H12")
-                                 & Phase %in% c("L0", "L1", "NA")) # remove blanks
+df2plot <- read.table(paste0(here(), '/1-data/Pool-vs-unpool.txt'), header = TRUE, sep=" ") %>%
+   filter(unpooled > 0 & pooled > 0)
 
-taxa2keep <- psmelt(ps2plot %>% transform_sample_counts(function(x) x/sum(x))) %>% # convert to relative abundance
-  filter(Abundance > cutoff_SI) #
+correlation_result <- df2plot %>%
+  summarize(
+    cor_value = cor(log10(unpooled), log10(pooled), method = "pearson"),  # Pearson correlation coefficient
+    p_value = cor.test(log10(unpooled), log10(pooled), method = "pearson")$p.value,  # Extract p-value
+    .groups = "drop")
 
-ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>%  # keep ASVs in taxa2keep
-  transform_sample_counts(function(x) x/sum(x)) # renomalize
+correlation_result
 
-df2plot <- psmelt(ps2plot) # convert to long form
-df2plot <- set_family_order(df2plot, taxa_order) # set Family2 order
-
-set.seed(100) # Consistent pcoa
-ps2ordinate <- ps2plot # Choose which samples you want to ordinate
-otu_table_ps <- otu_table(ps2ordinate)
-
-otu_table_ps_clean <- otu_table_ps[rowSums(otu_table_ps) > 0, ] # Remove rows with all zeros (empty OTU rows)
-otu_table_ps_clean <- otu_table_ps_clean[rowSums(otu_table_ps_clean > 0) >= 3, ] # Remove OTUs present in < 3 samples
-
-retained_otus <- taxa_names(otu_table_ps_clean)
-
-# Subset all components accordingly
-ps_clean <- merge_phyloseq(
-  otu_table(otu_table_ps_clean),
-  sample_data(ps),
-  tax_table(ps)[retained_otus, ],
-  phy_tree(ps)
-)
-
-ps_clean <- prune_taxa(retained_otus, ps_clean)
-
-bc_dist <- phyloseq::distance(ps_clean, method = "bray")
-bc_mat  <- as.matrix(bc_dist)
-
-bc_long <- bc_mat %>%
-  as_tibble(rownames = "sample1") %>%
-  pivot_longer(-sample1, names_to = "sample2", values_to = "distance") %>%
-  filter(sample1 < sample2)  # upper triangle only
-
-samdf <- as(sample_data(ps_clean), "data.frame") %>%
-  rownames_to_column("Sample")
-
-meta1 <- samdf %>%
-  rename(sample1 = Sample) %>%
-  rename_with(~ paste0(., "1"), -sample1)
-
-meta2 <- samdf %>%
-  rename(sample2 = Sample) %>%
-  rename_with(~ paste0(., "2"), -sample2)
-
-bc_long_meta <- bc_long %>%
-  left_join(meta1, by = "sample1") %>%
-  left_join(meta2, by = "sample2")
-
-bc_filtered <- bc_long_meta %>%
-  filter( (Platform1 == "MiSeq"  & Platform2 == "NovaSeq") |
-          (Platform1 == "NovaSeq" & Platform2 == "MiSeq")) %>%
-  mutate(
-    label = if_else(
-      Subject1 == Subject2 & Well1 == Well2 & Drug1 == Drug2,
-      "Same", "Different"
-    )
-  )
-
-g <- ggplot(bc_filtered, aes(x = distance, fill = label)) +
-  geom_histogram(binwidth = 0.05, color = "black", linewidth = 0.2) +
-  facet_grid(rows = vars(label), scales = "free_y") +
-  scale_fill_manual(values = c("Same" = "#FF0000", "Diff" = "grey")) +
-  labs(
-    x = "Bray-Curtis distance",
-    y = "Count",
-    fill = "Comparison"
-  ) +
-   theme_bw() +
-   theme(legend.position = "none",
-         panel.grid.major = element_blank(),      # Remove major grid lines
-         panel.grid.minor = element_blank()) +     # Remove minor grid lines
-   theme_custom_text()
+g <- ggplot(df2plot, aes(x = log10(unpooled), y = log10(pooled))) +
+     geom_point(shape = 16, size = 1, color = "#CCCCCC", stroke = 0.2, alpha = 0.5) +  # Fill color for the points
+     geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red", linewidth = 0.3) +  # Add y = x line
+     annotate("text",
+        x = -3, y = -0.25,
+        label = bquote(italic(r) == .(round(correlation_result$cor_value, 2)) ~ "," ~ italic(p) == .(sprintf("%.2e", correlation_result$p_value))),
+        color = "red", size = 2, hjust = 0
+     ) +
+     force_panelsizes(rows =  unit(c(4, 4, 4, 4), "cm"),
+                      cols = unit(c(4, 4, 4, 4), "cm"), TRUE) +
+     labs(x = expression(log[10]*"(Unpooled ASV rel. abund.)"), y = expression(log[10]*"(Pooled ASV rel. abund.)")) +
+     theme_bw() +
+     theme_custom_text() +
+     theme(panel.grid.major = element_blank(),      # Remove major grid lines
+           panel.grid.minor = element_blank()) +     # Remove minor grid lines
+     
+     coord_fixed(xlim = c(-3, 0), ylim = c(-3, 0))  # Set limits for both axes
 
 ggsave(paste0(directory, "Fig3/Fig3C.pdf"), plot = g, device = "pdf", width = 2, height = 2)
-```
-
-#######################################
-# Fig. 3D: Long-read sequencing
-#######################################
-
-```{r Fig 3D}
-
-ps2plot <- ps2
-
-taxa2keep <- psmelt(ps2plot %>% transform_sample_counts(function(x) x/sum(x))) %>% # convert to relative abundance
-  filter(Abundance > cutoff_MT) # identify taxa with relative abundances greater than cutoff
-
-ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>% # keep ASVs in taxa2keep
-  transform_sample_counts(function(x) x/sum(x)) # renormalize
-
-df2plot <- psmelt(ps2plot) %>% # convert to long form
-  mutate(PCR = factor(PCR, levels = c("EMP", "CUPID-seq", "Full"), ordered = TRUE))
-df2plot <- set_family_order(df2plot, taxa_order2) # set Family2 order
-
-family2_scale <- get_color_mapping(df2plot) # legend colors
-
-g <- ggplot(df2plot, aes(x = 1, y = Abundance, fill = Family2)) + 
-     geom_bar(aes(x = PCR), position = "stack", stat = "identity", color = "black", linewidth = 0.1) + 
-     scale_y_continuous("Relative Abundance", breaks = c(0.00, 0.25, 0.50, 0.75, 1.00)) +
-     scale_fill_manual(values = family2_scale$values, breaks = family2_scale$breaks, labels = family2_scale$labels) +
-     facet_nested(cols = vars(Sample_num), scales = "free", space = "free") +
-     theme_bw() +
-     theme(axis.ticks.y = element_blank(),
-           axis.title.x = element_blank(),
-           axis.text.x = element_text(size = 6, angle = 90, hjust = 1), 
-           axis.ticks.x = element_blank(),
-           panel.background = element_blank(),
-           panel.grid.major = element_blank(),      # Remove major grid lines
-           panel.grid.minor = element_blank(),
-           legend.position = "none") + # no legend 
-     theme_custom_text()
-
-ggsave(paste0(directory, "Fig3/Fig3D.pdf"), plot = g, device = "pdf", width = 2, height = 2)
-
-g <- ggplot(df2plot, aes(x = 1, y = Abundance, fill = Family2)) + 
-     geom_bar(aes(x = PCR), position = "stack", stat = "identity", color = "black", linewidth = 0.1) + 
-     scale_y_continuous("Relative Abundance", breaks = c(0.00, 0.25, 0.50, 0.75, 1.00)) +
-     scale_fill_manual(values = family2_scale$values, breaks = family2_scale$breaks, labels = family2_scale$labels) +
-     facet_nested(cols = vars(Sample_num), scales = "free", space = "free") +
-     theme_custom_text() +
-     theme(legend.text = element_text(size = 5),  # Legend text size
-           legend.key.size = unit(0.2, "cm")) +
-     guides(fill = guide_legend(ncol = 1, byrow = FALSE)) + # Legend columns, fill legend items by column
-     labs(fill = "Family") # Change legend label
-
-# Extract and display only the legend
-legend <- get_legend(g)
-
-ggsave(paste0(directory, "Fig3/Fig3D_legend.pdf"), plot = legend, device = "pdf", width = 2.5, height = 2.5)
-
 ```
