@@ -95,10 +95,10 @@ ggsave(paste0(directory, "Fig4/Fig4A.pdf"), plot = g, device = "pdf", width = 2,
 ```
 
 #######################################
-# Fig. S1A: ASV relative abundance of EMP vs CUPID-Seq, broken down by family
+# Fig. S5: ASV relative abundance of EMP vs CUPID-Seq, broken down by family
 #######################################
 
-```{r Fig S1}
+```{r Fig S5}
 
 g <- ggplot(transposed_df, aes(x = EMP, y = DIP, fill = Color)) +
      geom_point(shape = 21, size = 1, stroke = 0.2, alpha = 0.5, color = "black") +  # Fill color for the points
@@ -114,10 +114,11 @@ g <- ggplot(transposed_df, aes(x = EMP, y = DIP, fill = Color)) +
      theme_custom_text() +
      theme(legend.position = "none",
            panel.grid.major = element_blank(),      # Remove major grid lines
-           panel.grid.minor = element_blank()) +     # Remove minor grid lines
+           panel.grid.minor = element_blank(),
+           strip.text = element_text(size = 5)) +     # Remove minor grid lines
      coord_fixed()
 
-ggsave(paste0(directory, "FigS1/FigS1A.pdf"), plot = g, device = "pdf", width = 6, height = 6)
+ggsave(paste0(directory, "FigS5/FigS5.pdf"), plot = g, device = "pdf", width = 6, height = 6)
 
 ```
 
@@ -155,10 +156,10 @@ write_xlsx(correlation_result1, paste0(here(), "/1-data/TableS2.xlsx"))
 ```
 
 #######################################
-# Fig. S4A: Calculating median fold change per family
+# Fig. S6A: Calculating median fold change per family
 #######################################
 
-```{r Fig S4A}
+```{r Fig S6A}
 
 ps2plot <- ps %>% subset_samples(!Phase %in% c("L2", "L3") # only one set of DIP
                               & !Well %in% c("F01", "H01", "H12")) # remove blanks
@@ -232,14 +233,15 @@ g <- ggplot(fold_changes_long, aes(x = Value, fill = Color)) +
       theme_custom_text() +
       theme(legend.position = "none",
                panel.grid.major = element_blank(),      # Remove major grid lines
-               panel.grid.minor = element_blank())      # Remove minor grid lines
+               panel.grid.minor = element_blank(),      # Remove minor grid lines
+               strip.text = element_text(size = 5))     
       
 
-ggsave(paste0(directory, "FigS2/FigS2A.pdf"), plot = g, device = "pdf", width = 6, height = 4)
+ggsave(paste0(directory, "FigS6/FigS6A.pdf"), plot = g, device = "pdf", width = 6, height = 4)
 ```
 
 #######################################
-# Fig. S4B: Normalization
+# Fig. 4B: Normalization
 #######################################
 
 ```{r Fig 4B}
@@ -363,7 +365,7 @@ correlation_result1
 ggsave(paste0(directory, "Fig4/Fig4B.pdf"), plot = g, device = "pdf", width = 2, height = 2)
 ```
 
-```{r Fig S2B}
+```{r Fig S6B}
 
 g <- ggplot(transposed_df, aes(x = EMP, y = DIP, fill = Color)) +
      geom_point(shape = 21, size = 1, stroke = 0.2, alpha = 0.5, color = "black") +  # Fill color for the points
@@ -379,10 +381,11 @@ g <- ggplot(transposed_df, aes(x = EMP, y = DIP, fill = Color)) +
      theme_custom_text() +
      theme(legend.position = "none",
            panel.grid.major = element_blank(),      # Remove major grid lines
-           panel.grid.minor = element_blank()) +     # Remove minor grid lines
+           panel.grid.minor = element_blank(),
+           strip.text = element_text(size = 5)) +     # Remove minor grid lines
      coord_fixed()
 
-ggsave(paste0(directory, "FigS2/FigS2B.pdf"), plot = g, device = "pdf", width = 6, height = 6)
+ggsave(paste0(directory, "FigS6/FigS6B.pdf"), plot = g, device = "pdf", width = 6, height = 6)
 
 ```
 
