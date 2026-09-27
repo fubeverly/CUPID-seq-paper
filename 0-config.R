@@ -15,6 +15,11 @@ library(ape)
 library(readxl) # read excel files
 library(writexl) # write excel files
 library(ggrepel) # ggplot2 text labels
+library(extrafont)
+library(ggExtra) # gg histogram
+
+#font_import() #one time
+#loadfonts(device = "pdf")
 
 ##########################
 # Include custom functions
@@ -24,7 +29,7 @@ setup_tables <- function(directory, sample_sheet_path) {
   # Default Setup
   
   # import custom family colors
-  colors <- read_excel(paste0(paste0(here(), '/1-data/Family_colors.xlsx')), sheet = 2)
+  colors <- read_excel(paste0(paste0(here(), '/1-data/Family_colors.xlsx')), sheet = "SILVA")
   colors$Color <- paste0("#", colors$Color)
   colors <- colors %>% mutate(fOTU = paste(Kingdom, Phylum, Class, Order, Family, sep=";"))
   colors <- colors %>% mutate(fOTU = factor(fOTU, levels = rev(unique(colors$fOTU)), ordered = TRUE))
@@ -133,36 +138,6 @@ set_family_order <- function(df2plot, taxa_order) {
     return(df2plot)
 }
 
-set_ordered_factors <- function(df2plot, taxa_order) {
-  # Set default ordered factors in dataframe
-  df2plot$pH <- factor(df2plot$pH) # Convert pH to a factor (discrete values)
-  df2plot$Mouse_no <- factor(df2plot$Mouse_no) # Convert pH to a factor (discrete values)
-  df2plot$Buffer <- factor(df2plot$Buffer) # Convert pH to a factor (discrete values)
-  
-  df2plot <- df2plot %>% 
-    mutate(Project = factor(Project, levels = c("c2m5", "c2m7", "m3g1", "m3g2", 
-                                                "MouseExp1", "MouseExp2", "MouseExp3", "MouseAvatar", "Klebsiella1", "Klebsiella2", "SIBO"), ordered = TRUE)) %>%
-    mutate(Platform = factor(Platform, levels = c("MiSeq", "NovaSeq", "NextSeq"), ordered = TRUE)) %>%
-    mutate(Sample_type = factor(Sample_type, levels = c("InVitroCom", "Control", "Sequencing", "Gavage", "Gavage1", "Gavage2", "Isolate", 
-                                                        "Saliva", "Capsule", "ProxSI", "MidSI", "DistalSI", "Cecum", "Stool", "Blood"), ordered = TRUE)) %>%
-    mutate(Community = factor(Community, levels = c("NA", "Input", "GermFree", "Conventional", "Kleb", 
-                                                    "DerivedSI", "DerivedStool_2_DerivedSI", "DerivedSI_DerivedStool", "DerivedStool", "DerivedSI_2_DerivedStool",
-                                                    "DirectSI", "DirectSI_DirectStool", "DirectStool", 
-                                                    "SynSI", "SynStool_2_SynSI", "SynStool", "SynSI_2_SynStool", "SynGut",
-                                                    "SynSI2", "SynSI2_SynStool2", "SynStool2"), ordered = TRUE)) %>%
-    mutate(Location = factor(Location, levels = c("NA", "Saliva", "SI", "AC", "Cecum", "Stool", "Gut"), ordered = TRUE)) %>%
-    mutate(Donor = factor(Donor, levels = c("NA", "Subj1", "KD30", "Subj2", "Subj3", "Subj4",
-                                            "Donor197", "Donor1062", "Donor1064", "Donor1065", "Donor1066", "Donor1067", "Donor1068", "Donor2522",
-                                            "KC02", "KC21"), ordered = TRUE)) %>%
-    mutate(Pathogen = factor(Pathogen, levels = c("NA", "None", "Kleb"), ordered = TRUE)) %>%
-    mutate(Mouse_breed = factor(Mouse_breed, levels = c("NA", "B6", "SW", "SW1", "SW2"), ordered = TRUE)) %>%
-    mutate(Mouse_sex = factor(Mouse_sex, levels = c("NA", "Male", "Female"), ordered = TRUE)) %>%
-    mutate(Diet = factor(Diet, levels = c("NA", "SD", "MD"), ordered = TRUE)) %>%
-    mutate(Mouse_no = factor(Mouse_no, levels = c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", 
-                                                  "10", "11", "12", "13", "14", "15"), ordered = TRUE))
-  return(df2plot)
-}
-
 get_color_mapping <- function(df2plot){
   # Given a long form data frame, return a mapping of Color (HEX code) to Family2, sorted in Family2 order.
   family2_scale <- unique(df2plot[, c("Color", "Family2")])
@@ -188,18 +163,6 @@ theme_custom_comp <- function() {
     axis.text.x = element_blank(), 
     axis.ticks.x = element_blank(),
     panel.background = element_blank(),
-    legend.position = "none", # no legend
-  )
-}
-
-theme_custom_comp <- function() {
-  # Set default plotting method for composition in ggplot2
-  theme(
-    axis.ticks.y = element_blank(),
-    axis.title.x = element_blank(),
-    axis.text.x = element_blank(), 
-    axis.ticks.x = element_blank(),
-    panel.background = element_blank(),
     axis.text.y = element_text(margin = margin(r = 0.5)),
     legend.position = "none", # no legend
   )
@@ -208,13 +171,12 @@ theme_custom_comp <- function() {
 theme_custom_text <- function() {
   # set all fontsizes to be 6 and black
   theme(
-    legend.text = element_text(size = 6, color = "black"),
-    legend.title = element_text(size = 6, color = "black"), 
-    axis.text = element_text(size = 6, color = "black"),    
-    axis.title = element_text(size = 7, color = "black"),   
-    plot.title = element_text(size = 6, color = "black"),   
-    strip.text = element_text(size = 6, color = "black"),
-    axis.ticks = element_line(color = "black", linewidth = 0.25),
-    panel.grid.major = element_line(linewidth = 0.25)
+    legend.text = element_text(size = 6, color = "black", family = "Arial"),
+    legend.title = element_text(size = 6, color = "black", family = "Arial"),
+    axis.text = element_text(size = 6, color = "black", family = "Arial"),
+    axis.title = element_text(size = 7, color = "black", family = "Arial"),
+    plot.title = element_text(size = 6, color = "black", family = "Arial"),
+    strip.text = element_text(size = 6, color = "black", family = "Arial"),
+    axis.ticks = element_line(color = "black", linewidth = 0.25)
   )
 }
