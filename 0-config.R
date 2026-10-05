@@ -180,3 +180,10 @@ theme_custom_text <- function() {
     axis.ticks = element_line(color = "black", linewidth = 0.25)
   )
 }
+
+get_evals <- function(pcoa_out){
+  # function to get variance percentages
+  evals <- pcoa_out$values[,1]
+  var_exp <- 100 * evals/sum(evals)
+  return(list("evals" = evals, "variance_exp" = var_exp))
+}

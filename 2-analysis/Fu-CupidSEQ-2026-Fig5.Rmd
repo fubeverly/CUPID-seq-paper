@@ -83,9 +83,10 @@ pos_summary <- bind_rows(
 
 g <- ggplot(pos_summary, aes(x = position, y = mean_Q, color = Group)) +
   geom_line(linewidth = 0.2) +
-  scale_color_manual(values = c("CUPID-seq" = "#FF0000", "EMP" = "#0000FF")) +
+  scale_color_manual(values = c("CUPID-seq" = "#FF0000", "EMP" = "#999999")) +
   labs(x = "Read position (bp)", y = "Mean Phred quality score") +
   theme_bw() + 
+  force_panelsizes(rows = unit(3.5, "cm"), cols = unit(3.5, "cm"), respect = TRUE) +
   theme_custom_text() +
   theme(aspect.ratio = 1,
         legend.position = "none",
@@ -109,9 +110,10 @@ read_quality_all %>%
 
 g <- ggplot(read_quality_all, aes(x = MeanQ, fill = Group, color = Group)) +
   geom_density(alpha = 0.5, linewidth = 0.2) +
-  scale_color_manual(values = c("EMP" = "blue", "CUPID-seq" = "red")) +
-  scale_fill_manual(values = c("EMP" = "blue", "CUPID-seq" = "red")) +
+  scale_color_manual(values = c("EMP" = "#999999", "CUPID-seq" = "red")) +
+  scale_fill_manual(values = c("EMP" = "#999999", "CUPID-seq" = "red")) +
   labs(x = "Mean Phred quality score per read", y = "Density") +
+  force_panelsizes(rows = unit(3.5, "cm"), cols = unit(3.5, "cm"), respect = TRUE) +
   theme_bw() +
   theme_custom_text() +
   theme(aspect.ratio = 1,
@@ -156,23 +158,29 @@ summary_stats <- transposed_df %>%
 
 summary_stats
 
-g <- ggplot(transposed_df, aes(x = EMP * 100, y = DIP * 100)) +
-  geom_point(shape = 21, size = 1, stroke = 0.2, fill = "#CCCCCC", color = "black") +  # Fill color for the points
-  scale_color_identity() +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red", size = 0.3) +  # Add y = x line
-  scale_x_continuous(limits = c(85, 100)) +
+plot_data <- transposed_df %>%
+  select(EMP, DIP) %>%
+  pivot_longer(cols = c(EMP, DIP), names_to = "Method", values_to = "PctNonchim") %>%
+  mutate(PctNonchim = PctNonchim * 100,
+         Method = if_else(Method == "DIP", "CUPID-seq", Method),
+         Method = factor(Method, levels = c("EMP", "CUPID-seq")))
+
+g <- ggplot(plot_data, aes(x = Method, y = PctNonchim, fill = Method)) +
+  geom_violin(color = "black", linewidth = 0.3, alpha = 0.25) +
+  geom_jitter(shape = 21, size = 1, stroke = 0.2, color = "black",
+              width = 0.3, alpha = 1) +
+  scale_fill_manual(values = c("EMP" = "#999999", "CUPID-seq" = "#FF0000")) +
   scale_y_continuous(limits = c(85, 100)) +
-  labs(x = "% non-chimeric (EMP)", y = "% non-chimeric (CUPID-seq)") +
+  labs(x = "Method", y = "% Non-chimeric") +
+  force_panelsizes(rows = unit(3.5, "cm"), cols = unit(2.5, "cm"), respect = TRUE) +
   theme_bw() +
   theme_custom_text() +
-  theme(aspect.ratio = 1,
+  theme(aspect.ratio = 1.5,
         legend.position = "none",
-        panel.grid.major = element_blank(),      # Remove major grid lines
-        panel.grid.minor = element_blank())      # Remove minor grid lines
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
 
-g <- ggMarginal(g, type = "density", fill = "#CCCCCC", color = "black", linewidth = 0.2, size = 8)
-
-ggsave(paste0(directory, "Fig5/Fig5B.pdf"), plot = g, device = "pdf", width = 2, height = 2)
+ggsave(paste0(directory, "Fig5/Fig5B.pdf"), plot = g, device = "pdf", width = 1.5, height = 1.83)
 ```
 
 #######################################
@@ -210,21 +218,28 @@ reads_df %>%
     n = n()
   )
 
-g <- ggplot(reads_df, aes(x = EMP_reads/1000, y = DIP_reads/1000)) +
-  geom_point(shape = 21, size = 1, stroke = 0.2, alpha = 1, fill = "#CCCCCC", color = "black") +
-  labs(
-    x = expression("EMP total reads (\u00D7" * 10^3 * ")"),
-    y = expression("CUPID-seq total reads (\u00D7" * 10^3 * ")")
-  ) +
+plot_data <- reads_df %>%
+  select(EMP_reads, DIP_reads) %>%
+  pivot_longer(cols = c(EMP_reads, DIP_reads), names_to = "Method", values_to = "Reads") %>%
+  mutate(Reads_K = Reads / 1000,
+         Method = if_else(Method == "DIP_reads", "CUPID-seq", "EMP"),
+         Method = factor(Method, levels = c("EMP", "CUPID-seq")))
+
+g <- ggplot(plot_data, aes(x = Method, y = Reads_K, fill = Method)) +
+  geom_violin(color = "black", linewidth = 0.3, alpha = 0.25) +
+  geom_jitter(shape = 21, size = 1, stroke = 0.2, color = "black",
+              width = 0.3, alpha = 1) +
+  scale_fill_manual(values = c("EMP" = "#999999", "CUPID-seq" = "#FF0000")) +
+  labs(x = "Method", y = expression("Total reads (" * "\u00D7" * 10^3 * ")")) +
+  force_panelsizes(rows = unit(3.5, "cm"), cols = unit(2.5, "cm"), respect = TRUE) +
   theme_bw() +
   theme_custom_text() +
-  theme(aspect.ratio = 1,
+  theme(aspect.ratio = 1.5,
+        legend.position = "none",
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank())
 
-g <- ggMarginal(g, type = "density", fill = "#CCCCCC", color = "black", linewidth = 0.2, size = 8)
-
-ggsave(paste0(directory, "Fig5/Fig5C.pdf"), plot = g, device = "pdf", width = 2, height = 2)
+ggsave(paste0(directory, "Fig5/Fig5C.pdf"), plot = g, device = "pdf", width = 1.5, height = 1.83)
 
 ps_rare <- rarefy_even_depth(ps2plot, sample.size = 10000, rngseed = 100,
                              replace = FALSE, trimOTUs = TRUE)
@@ -404,6 +419,7 @@ g <- ggplot(transposed_df %>% filter(!is.na(EMP_Richness_full), !is.na(DIP_Richn
   labs(x = "Richness (EMP)", y = "Richness (CUPID-seq)") +
   scale_x_continuous(limits = c(0, 80)) +
   scale_y_continuous(limits = c(0, 80)) +
+  force_panelsizes(rows = unit(3.5, "cm"), cols = unit(3.5, "cm"), respect = TRUE) +
   theme_bw() + 
   theme_custom_text() +
   theme(aspect.ratio = 1,
@@ -421,6 +437,7 @@ g <- ggplot(transposed_df %>% filter(!is.na(EMP_Evenness_full), !is.na(DIP_Evenn
   scale_x_continuous(limits = c(0, 0.8)) +
   scale_y_continuous(limits = c(0, 0.8)) +
   labs(x = "Evenness (EMP)", y = "Evenness (CUPID-seq)") +
+  force_panelsizes(rows = unit(3.5, "cm"), cols = unit(3.5, "cm"), respect = TRUE) +
   theme_bw() + theme_custom_text() +
   theme(aspect.ratio = 1,
         legend.position = "none",
@@ -435,6 +452,7 @@ g <- ggplot(transposed_df %>% filter(!is.na(EMP_pct_singleton), !is.na(DIP_pct_s
   geom_point(shape = 21, size = 1, stroke = 0.2, fill = "#CCCCCC", color = "black") +
   geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red", size = 0.3) +
   labs(x = "% singleton ASVs (EMP)", y = "% singleton ASVs (CUPID-seq)") +
+  force_panelsizes(rows = unit(3.5, "cm"), cols = unit(3.5, "cm"), respect = TRUE) +
   theme_bw() + theme_custom_text() +
   theme(aspect.ratio = 1,
         legend.position = "none",
@@ -464,6 +482,107 @@ ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>%
 df2plot <- psmelt(ps2plot)
 df2plot <- set_family_order(df2plot, taxa_order)
 
+### Composition
+
+family2_scale <- get_color_mapping(df2plot) # legend colors
+
+g <- ggplot(df2plot %>% filter(Subject == "Subj5"), aes(x = 1, y = Abundance, fill = Family2)) + 
+  geom_bar(aes(x = PCR), position = "stack", stat = "identity", color = "black", linewidth = 0.1) +
+  scale_y_continuous("Relative Abundance", breaks = c(0.00, 0.25, 0.50, 0.75, 1.00)) +
+  scale_fill_manual(values = family2_scale$values, breaks = family2_scale$breaks, labels = family2_scale$labels) +
+  facet_wrap(vars(Drug_no), ncol = 16) +
+  theme_custom_comp() +
+  theme_custom_text() +
+  theme(strip.text = element_blank(),
+        strip.background = element_blank())
+
+ggsave(paste0(directory, "FigSX/FigSX_1.pdf"), plot = g, device = "pdf", width = 5.5, height = 3)
+
+g <- ggplot(df2plot %>% filter(Subject == "Subj6"), aes(x = 1, y = Abundance, fill = Family2)) + 
+  geom_bar(aes(x = PCR), position = "stack", stat = "identity", color = "black", linewidth = 0.1) +
+  scale_y_continuous("Relative Abundance", breaks = c(0.00, 0.25, 0.50, 0.75, 1.00)) +
+  scale_fill_manual(values = family2_scale$values, breaks = family2_scale$breaks, labels = family2_scale$labels) +
+  facet_wrap(vars(Drug_no), ncol = 16) +
+  theme_custom_comp() +
+  theme_custom_text() +
+  theme(strip.text = element_blank(),
+        strip.background = element_blank())
+
+ggsave(paste0(directory, "FigSX/FigSX_2.pdf"), plot = g, device = "pdf", width = 5.5, height = 3)
+
+g <- ggplot(df2plot, aes(x = 1, y = Abundance, fill = Family2)) + 
+  geom_bar(aes(x = PCR), position = "stack", stat = "identity", color = "black", linewidth = 0.1) +
+  scale_y_continuous("Relative Abundance", breaks = c(0.00, 0.25, 0.50, 0.75, 1.00)) +
+  scale_fill_manual(values = family2_scale$values, breaks = family2_scale$breaks, labels = family2_scale$labels) +
+  theme_custom_comp() +
+  theme_custom_text() +
+  theme(legend.position = "right",
+        strip.text = element_blank(),
+        strip.background = element_blank(),  #legend.position = "no",
+        legend.text = element_text(size = 5),  # Legend text size
+        legend.key.size = unit(0.2, "cm")) +
+  guides(fill = guide_legend(ncol = 2, byrow = FALSE)) + # Legend columns, fill legend items by column
+  labs(fill = "Family")  # Change legend label
+
+legend <- get_legend(g)
+
+ggsave(paste0(directory, "FigSX/FigSX_legend.pdf"), plot = legend, device = "pdf", width = 5, height = 5)
+
+
+set.seed(100) # Consistent pcoa
+
+for (sid in c("Subj5", "Subj6")) {
+  
+  ps2ordinate <- ps_rarefied %>% subset_samples(Subject == sid)# Choose which samples you want to ordinate
+  
+  otu_table_ps <- otu_table(ps2ordinate)
+  
+  otu_table_ps_clean <- otu_table_ps[rowSums(otu_table_ps) > 0, ] # Remove rows with all zeros (empty OTU rows)
+  otu_table_ps_clean <- otu_table_ps_clean[rowSums(otu_table_ps_clean > 0) >= 3, ] # Remove OTUs present in < 3 samples
+  
+  retained_otus <- taxa_names(otu_table_ps_clean)
+  
+  # Subset all components accordingly
+  ps_clean <- merge_phyloseq(otu_table(otu_table_ps_clean),
+                             sample_data(ps),
+                             tax_table(ps)[retained_otus, ],
+                             phy_tree(ps))
+  
+  ps_clean <- prune_taxa(retained_otus, ps_clean)
+  
+  pcoa_weighted <- ordinate(ps_clean, method = "MDS", distance = "bray")
+  ordination_data <- merge(pcoa_weighted$vectors, samdf, by = "row.names")
+  var_exp <- get_evals(pcoa_weighted)$variance_exp # variances
+  
+  g <- ggplot(ordination_data, aes(x = Axis.1, y = Axis.2, fill = PCR)) +
+    geom_line(aes(group = Drug_no), color = "black", linewidth = 0.2) +
+    geom_point(stroke = 0.2, color = "black", shape = 21) +
+    scale_fill_manual(values = c("EMP" = "#666666", "DIP" = "red")) +
+    force_panelsizes(rows = unit(3.5, "cm"), cols = unit(3.5, "cm"), respect = TRUE) +
+    guides(fill = guide_legend(override.aes = list(shape = 21))) + # Fill legend
+    labs(x = paste0("PCo1 ", round(var_exp[1],2), "%"),
+         y = paste0("PCo2 ", round(var_exp[2],2), "%")) +
+    theme(panel.background = element_rect(fill = "white", colour = NA),
+          panel.border = element_rect(colour = "black", linewidth = 0.5),
+          aspect.ratio = 1,
+          legend.position = "none") +
+    theme_custom_text()
+  
+  ggsave(paste0(directory, "/FigSX/PCoA-", sid, ".pdf"), plot = g, device = "pdf", width = 2, height = 2)
+}
+
+####
+
+# Mean abundance per row (per feature per sample)
+mean(df2plot %>% filter(Family == "Enterobacteriaceae") %>% pull(Abundance))
+
+# Sum of Enterobacteriaceae per Sample, then the average across samples
+entero_per_sample <- df2plot %>%
+  group_by(Sample) %>%
+  summarise(Enterobacteriaceae = sum(Abundance[Family == "Enterobacteriaceae"], na.rm = TRUE),
+            .groups = "drop")
+
+mean(entero_per_sample$Enterobacteriaceae)
 safe_max <- function(x) if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
 
 transposed_df <- df2plot %>%
@@ -477,8 +596,7 @@ transposed_df <- df2plot %>%
     EMP = safe_max(EMP),
     DIP = safe_max(DIP),
     .groups = "drop"
-  ) %>%
-  filter(!is.na(EMP), !is.na(DIP))  # belt-and-suspenders, should be redundant now
+  )
 
 transposed_df <- merge(transposed_df, taxa_order, by = "Feature")
 
@@ -498,10 +616,11 @@ lab <- bquote(italic(r) == .(r_str) ~ "," ~ italic(p) == .(p_str))
 g <- ggplot(transposed_df, aes(x = EMP, y = DIP, fill = Color)) +
   geom_point(shape = 21, size = 1, stroke = 0.2, color = "black") +  
   scale_fill_identity() +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red", size = 0.3) +  # Add y = x line
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red", linewidth = 0.3) +  # Add y = x line
   annotate("text", x = -3, y = -0.25,
            label = deparse(lab), parse = TRUE,
            color = "red", size = 2, hjust = 0) +
+  force_panelsizes(rows = unit(3.5, "cm"), cols = unit(3.5, "cm"), respect = TRUE) +
   scale_x_continuous(limits = c(-3, 0)) +
   scale_y_continuous(breaks = c(0, -1, -2, -3, -4), limits = c(-3, 0)) +
   labs(x = expression(log[10]*"(EMP ASV rel. abund.)"), y = expression(log[10]*"(CUPID-seq ASV rel. abund.)")) +
@@ -513,6 +632,8 @@ g <- ggplot(transposed_df, aes(x = EMP, y = DIP, fill = Color)) +
         panel.grid.minor = element_blank())     # Remove minor grid lines
 
 ggsave(paste0(directory, "Fig5/Fig5G.pdf"), plot = g, device = "pdf", width = 2, height = 2)
+
+transposed_df
 
 #### Exploring zero abundance ASVs
 
@@ -569,6 +690,84 @@ temp_emp %>%
   count(detection_class) %>%
   mutate(pct = n / sum(n) * 100)
 
+###
+
+# build Feature -> sequence lookup via tax_table's Feature column + ref_seq slot
+tax_df <- as.data.frame(as(tax_table(ps2plot), "matrix"), stringsAsFactors = FALSE)
+tax_df$RowID <- rownames(tax_df)
+
+ref_seq_chr <- as.character(ps2plot@refseq)
+
+# align ref_seq to tax_table by name if ref_seq is named; otherwise assume
+# matching row order (standard phyloseq convention - all components share
+# the same taxa ordering unless something upstream reordered one but not
+# the other)
+if (!is.null(names(ref_seq_chr))) {
+  tax_df$Sequence <- ref_seq_chr[tax_df$RowID]
+} else {
+  stopifnot(nrow(tax_df) == length(ref_seq_chr))
+  tax_df$Sequence <- ref_seq_chr
+}
+
+stopifnot(!any(is.na(tax_df$Sequence)))  # fail loudly if any alignment gap slipped through
+
+seq_lookup <- setNames(tax_df$Sequence, tax_df$Feature)
+stopifnot(all(feature_summary_wide$Feature %in% names(seq_lookup)))
+
+# universe of sequences actually detected (>= cutoff) in each platform, across all samples
+dip_universe <- df2plot %>%
+  filter(PCR == "DIP", !is.na(Abundance), Abundance >= cutoff_SI) %>%
+  distinct(Feature) %>% pull(Feature)
+
+emp_universe <- df2plot %>%
+  filter(PCR == "EMP", !is.na(Abundance), Abundance >= cutoff_SI) %>%
+  distinct(Feature) %>% pull(Feature)
+
+dip_universe_seqs <- seq_lookup[dip_universe]
+emp_universe_seqs <- seq_lookup[emp_universe]
+
+# helper: for each feature in `query_features`, find min edit distance to
+# any sequence in `reference_seqs`
+min_dist_to_reference <- function(query_features, reference_seqs) {
+  query_seqs <- seq_lookup[query_features]
+  sapply(query_seqs, function(qseq) {
+    min(adist(qseq, reference_seqs)[1, ])
+  })
+}
+
+# --- DIP-only ASVs: nearest neighbor within the EMP universe ---
+dip_only_features <- feature_summary_wide %>%
+  filter(detection_class == "DIP-only (absent from EMP entirely)") %>%
+  pull(Feature)
+
+dip_only_min_dist <- min_dist_to_reference(dip_only_features, emp_universe_seqs)
+
+dip_only_summary <- data.frame(
+  Feature = dip_only_features,
+  min_edit_dist_to_EMP = dip_only_min_dist
+)
+
+cat("DIP-only ASVs (n =", length(dip_only_features), "):\n")
+cat("  % within 1nt of an EMP-detected sequence:", round(mean(dip_only_min_dist <= 1) * 100, 1), "%\n")
+cat("  % within 2nt of an EMP-detected sequence:", round(mean(dip_only_min_dist <= 2) * 100, 1), "%\n")
+cat("  median min edit distance:", median(dip_only_min_dist), "\n\n")
+
+# --- EMP-only ASVs: nearest neighbor within the DIP universe ---
+emp_only_features <- feature_summary_wide %>%
+  filter(detection_class == "EMP-only (absent from DIP entirely)") %>%
+  pull(Feature)
+
+emp_only_min_dist <- min_dist_to_reference(emp_only_features, dip_universe_seqs)
+
+emp_only_summary <- data.frame(
+  Feature = emp_only_features,
+  min_edit_dist_to_DIP = emp_only_min_dist
+)
+
+cat("EMP-only ASVs (n =", length(emp_only_features), "):\n")
+cat("  % within 1nt of a DIP-detected sequence:", round(mean(emp_only_min_dist <= 1) * 100, 1), "%\n")
+cat("  % within 2nt of a DIP-detected sequence:", round(mean(emp_only_min_dist <= 2) * 100, 1), "%\n")
+cat("  median min edit distance:", median(emp_only_min_dist), "\n")
 ```
 
 #######################################
@@ -793,6 +992,7 @@ g <- ggplot(transposed_df, aes(x = EMP, y = DIP, fill = Color)) +
   annotate("text", x = -3, y = -0.25,
            label = deparse(lab), parse = TRUE,
            color = "red", size = 2, hjust = 0) +
+  force_panelsizes(rows = unit(3.5, "cm"), cols = unit(3.5, "cm"), respect = TRUE) +
   scale_x_continuous( limits = c(-3, 0)) +
   scale_y_continuous( breaks = c(0, -1, -2, -3, -4), limits = c(-3, 0)) +
   labs(x = expression(log[10]*"(EMP ASV rel. abund.)"), y = expression(log[10]*"(CUPID-seq ASV rel. abund.)")) +
@@ -958,6 +1158,7 @@ g <- ggplot(bc_filtered, aes(x = distance, fill = label)) +
   facet_grid(rows = vars(label), scales = "free_y") +
   scale_fill_manual(values = c("Same" = "#FF0000", "Different" = "#CCCCCC")) +
   labs(x = "Bray-Curtis distance", y = "Count", fill = "Comparison") +
+  force_panelsizes(rows = unit(1.64, "cm"), cols = unit(3.5, "cm"), respect = TRUE) +
   theme_bw() +
   theme_custom_text() +
   theme(strip.background = element_rect(fill = "white", color = NA),
