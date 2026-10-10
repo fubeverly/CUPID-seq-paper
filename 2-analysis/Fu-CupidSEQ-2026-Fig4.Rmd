@@ -44,9 +44,9 @@ total_reads <- as.data.frame(sample_sums(ps2)) # get total number of reads
 colnames(total_reads) <- "total_reads"
 total_reads$Sample <- rownames(total_reads)
 
-# update samdf of phyloseq
+#update samdf of phyloseq
 samdf2 <- samdf2 %>%
-  select(-Sample) 
+  select(-Sample)
 sample_data(ps2) <- sample_data(samdf2)
 
 cutoff_SI <- 0.001 # Supplementary Info ASV cutoff
@@ -54,10 +54,10 @@ cutoff_MT <- 0.01 # Main Text ASV cutoff (to minimize legend)
 ```
 
 #######################################
-# Fig. 3X: phase PhiX
+# Extended Data Fig. 1: Phase PhiX
 #######################################
 
-```{r}
+```{r Extended Data Fig 1}
 
 df <- read_excel(paste0(here(), "/1-data/Phased_simulations.xlsx"), sheet = 1) # Read in sample metadata
 samdf <- read_excel(paste0(here(), "/1-data/Phased_simulations.xlsx"), sheet = 2) # Read in sample metadata
@@ -77,38 +77,10 @@ df_stdev$Sample <- sub("-stdev$", "", df_stdev$Sample)
 df_avg <- merge(df_avg, df_stdev[c("Sample", "SD", "Primers", "Strains")], by = c("Sample", "Primers", "Strains"))
 df_avg <- df_avg %>% mutate(Strains = factor(Strains, levels = c("All 120 strains", "50 strains", "15 strains"), ordered = TRUE))
 
-
 region_colors <- c("V1–V2" = "#FF0000", "V1–V3" = "#FF8000", "V3–V5" = "#008800",
                    "V4" = "#0000FF", "V6–V9" = "#8800FF")
 region_labels <- c("V1–V2" = "V1-V2", "V1–V3" = "V1-V3", "V3–V5" = "V3-V5",
                    "V4" = "V4", "V6–V9" = "V6-V9")  # plain hyphen for display only
-
-g <- ggplot(df_avg, aes(x = Primers, y = NDS, color = Region, fill = Region, group = Region)) +
-  geom_vline(xintercept = 8, linetype = "solid", color = "red", linewidth = 0.3) +
-  geom_ribbon(data = df_avg %>% filter(!is.na(SD) & SD > 0),
-              aes(ymin = NDS - SD, ymax = NDS + SD),
-              alpha = 0.25, color = NA) +
-  geom_line(linewidth = 0.3) +
-  geom_point(shape = 16, size = 1, stroke = 0.2) +
-  geom_hline(yintercept = c(0.1, 0.05), linetype = "dashed", color = "black", linewidth = 0.3) +
-  annotate("text", x = Inf, y = 0.1, label = "20% PhiX spike-in",
-           hjust = 1.05, vjust = -0.5, size = 1.5, color = "black") +
-  annotate("text", x = Inf, y = 0.05, label = "10% PhiX spike-in",
-           hjust = 1.05, vjust = -0.5, size = 1.5, color = "black") +
-  scale_color_manual(values = region_colors, labels = region_labels) +
-  scale_fill_manual(values = region_colors, labels = region_labels) +
-  facet_grid(cols = vars(Strains)) +
-  force_panelsizes(rows = unit(4, "cm"), cols = unit(4, "cm"), respect = TRUE) +
-  labs(x = "Number of phased primers", y = "Nucleotide diversity score") +
-  theme_bw() +
-  theme(strip.background = element_part_rect(fill = "white", color = "white"),
-        panel.grid.major = element_blank(),      # Remove major grid lines
-        panel.grid.minor = element_blank()) +     # Remove minor grid lines
-  theme_custom_text() +
-  coord_fixed()
-
-ggsave(paste0(directory, "Fig3/Phased_primers.pdf"), plot = g, device = "pdf", width = 6.5, height = 2.5)
-
 
 g <- ggplot(df_avg %>% filter(Region == "V4"), aes(x = Primers, y = NDS, group = Region)) +
   geom_vline(xintercept = 8, linetype = "solid", color = "red", linewidth = 0.3) +
@@ -136,8 +108,7 @@ g <- ggplot(df_avg %>% filter(Region == "V4"), aes(x = Primers, y = NDS, group =
   theme_custom_text() +
   coord_fixed()
 
-ggsave(paste0(directory, "Fig3/Phased_primers_V4.pdf"), plot = g, device = "pdf", width = 6.5, height = 2.5)
-
+ggsave(paste0(directory, "Extended/ED-Fig1.pdf"), plot = g, device = "pdf", width = 6.5, height = 2.5)
 
 ```
 
@@ -269,7 +240,6 @@ g <- ggplot(transposed_df %>% filter(Feature == "feature_0002"), aes(x = Phase1,
   theme(aspect.ratio = 1,
         panel.grid.major = element_blank(),       # Remove major grid lines
         panel.grid.minor = element_blank())       # Remove minor grid lines
-
 
 ggsave(paste0(directory, "Fig4/Fig4B.pdf"), plot = g, device = "pdf", width = 2, height = 2)
 ```

@@ -70,37 +70,37 @@ setup_tables <- function(directory, sample_sheet_path) {
   return(list(ps = ps, taxa_order = taxa_order, samdf = samdf))
 }
 
-setup_tables2 <- function(directory, sample_sheet_path) {
-  
-  # import custom family colors
-  colors <- read_excel(paste0(paste0(here(), '/1-data/Family_colors.xlsx')), sheet = 2)
-  colors$Color <- paste0("#", colors$Color)
-  colors <- colors %>% mutate(fOTU = paste(Kingdom, Phylum, Class, Order, Family, sep=";"))
-  colors <- colors %>% mutate(fOTU = factor(fOTU, levels = rev(unique(colors$fOTU)), ordered = TRUE))
-  
-  seqtab_nochim <- read.table(paste0(directory,'dsvs.master.txt'), header = TRUE, row.names = 1, sep="\t", colClasses = rep("character", 6)) # read in ASV read counts
-  taxa <- read.table(paste0(directory,'feature_data.txt'), header = TRUE, sep = "\t") # read in ASV taxon info
-  taxa <- taxa %>% mutate(fOTU = paste(Kingdom, Phylum, Class, Order, Family, sep=";")) %>% # add fOTU
-    mutate(Taxon = mapply(generate_taxon, Kingdom, Phylum, Class, Order, Family, Genus, Species)) %>% # add concise taxonomy name to plot
-    mutate(Family2 = ifelse(is.na(Family) | Family == "f__", Taxon, Family)) %>% # add Family2 name to plot
-    left_join(colors %>% select(fOTU, Color), by = c("fOTU")) # add Family colors 
-  taxa_order <- taxa %>% arrange(match(fOTU, colors$fOTU)) # arrange taxa based on fOTU order in colors
-  rownames(taxa) <- taxa$Feature # row names must match species.names
-  taxa <- as.matrix(taxa) # taxa must be matrix
-  
-  seqtab_matrix <- as.matrix(seqtab_nochim)
-  mode(seqtab_matrix) <- "numeric"
-  
-  samdf <- read_excel(paste0(here(), sample_sheet_path), sheet = 2) # Read in sample metadata
-  samdf <- as.data.frame(samdf) # convert to dataframe
-  rownames(samdf) <- sub('sample_', '', samdf$Sample) # change row names to be the sequencing name, remove "sample_"
-  samdf <- samdf[2:ncol(samdf)] # remove Sample column
-  
-  # create phyloseq object
-  ps <- phyloseq(otu_table(seqtab_matrix, taxa_are_rows = FALSE), sample_data(samdf), tax_table(taxa))
-  
-  return(list(ps = ps, taxa_order = taxa_order, samdf = samdf))
-}
+# setup_tables2 <- function(directory, sample_sheet_path) {
+#   
+#   # import custom family colors
+#   colors <- read_excel(paste0(paste0(here(), '/1-data/Family_colors.xlsx')), sheet = 2)
+#   colors$Color <- paste0("#", colors$Color)
+#   colors <- colors %>% mutate(fOTU = paste(Kingdom, Phylum, Class, Order, Family, sep=";"))
+#   colors <- colors %>% mutate(fOTU = factor(fOTU, levels = rev(unique(colors$fOTU)), ordered = TRUE))
+#   
+#   seqtab_nochim <- read.table(paste0(directory,'dsvs.master.txt'), header = TRUE, row.names = 1, sep="\t", colClasses = rep("character", 6)) # read in ASV read counts
+#   taxa <- read.table(paste0(directory,'feature_data.txt'), header = TRUE, sep = "\t") # read in ASV taxon info
+#   taxa <- taxa %>% mutate(fOTU = paste(Kingdom, Phylum, Class, Order, Family, sep=";")) %>% # add fOTU
+#     mutate(Taxon = mapply(generate_taxon, Kingdom, Phylum, Class, Order, Family, Genus, Species)) %>% # add concise taxonomy name to plot
+#     mutate(Family2 = ifelse(is.na(Family) | Family == "f__", Taxon, Family)) %>% # add Family2 name to plot
+#     left_join(colors %>% select(fOTU, Color), by = c("fOTU")) # add Family colors 
+#   taxa_order <- taxa %>% arrange(match(fOTU, colors$fOTU)) # arrange taxa based on fOTU order in colors
+#   rownames(taxa) <- taxa$Feature # row names must match species.names
+#   taxa <- as.matrix(taxa) # taxa must be matrix
+#   
+#   seqtab_matrix <- as.matrix(seqtab_nochim)
+#   mode(seqtab_matrix) <- "numeric"
+#   
+#   samdf <- read_excel(paste0(here(), sample_sheet_path), sheet = 2) # Read in sample metadata
+#   samdf <- as.data.frame(samdf) # convert to dataframe
+#   rownames(samdf) <- sub('sample_', '', samdf$Sample) # change row names to be the sequencing name, remove "sample_"
+#   samdf <- samdf[2:ncol(samdf)] # remove Sample column
+#   
+#   # create phyloseq object
+#   ps <- phyloseq(otu_table(seqtab_matrix, taxa_are_rows = FALSE), sample_data(samdf), tax_table(taxa))
+#   
+#   return(list(ps = ps, taxa_order = taxa_order, samdf = samdf))
+# }
 
 generate_taxon <- function(Kingdom, Phylum, Class, Order, Family, Genus, Species) {
   # Check for missing or placeholder values and create Taxon

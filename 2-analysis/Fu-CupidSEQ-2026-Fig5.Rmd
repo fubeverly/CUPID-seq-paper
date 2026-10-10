@@ -67,10 +67,68 @@ ps_rarefied <- prune_samples(keep_samples, ps2plot)
 ```
 
 #######################################
-# Fig. 5A/2: Read quality and distribution
+# Fig. 5B: Read distribution
 #######################################
 
-```{r Fig 5A}
+```{r Fig 5B}
+
+ps2plot <- ps %>% subset_samples(!Phase %in% c("L2", "L3") # only one plate of DIP
+                                 & !Well %in% c("F01", "H01", "H12")) # remove blanks
+
+safe_max <- function(x) if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
+
+meta_df <- as(sample_data(ps2plot), "data.frame")
+meta_df$SampleID <- rownames(meta_df)
+
+safe_max <- function(x) if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
+
+reads_df <- meta_df %>%
+  group_by(Subject, Well) %>%
+  mutate(EMP_reads = ifelse(PCR == "EMP", total_reads, NA),
+         DIP_reads = ifelse(PCR == "DIP", total_reads, NA)) %>%
+  select(Subject, Well, EMP_reads, DIP_reads) %>%
+  summarise(EMP_reads = safe_max(EMP_reads),
+            DIP_reads = safe_max(DIP_reads),
+            .groups = "drop") %>%
+  filter(!is.na(EMP_reads), !is.na(DIP_reads))
+
+reads_df %>%
+  summarise(
+    EMP_mean = mean(EMP_reads, na.rm = TRUE), EMP_sd = sd(EMP_reads, na.rm = TRUE),
+    DIP_mean = mean(DIP_reads, na.rm = TRUE), DIP_sd = sd(DIP_reads, na.rm = TRUE),
+    n = n()
+  )
+
+plot_data <- reads_df %>%
+  select(EMP_reads, DIP_reads) %>%
+  pivot_longer(cols = c(EMP_reads, DIP_reads), names_to = "Method", values_to = "Reads") %>%
+  mutate(Reads_K = Reads / 1000,
+         Method = if_else(Method == "DIP_reads", "CUPID-seq", "EMP"),
+         Method = factor(Method, levels = c("EMP", "CUPID-seq")))
+
+g <- ggplot(plot_data, aes(x = Method, y = Reads_K, fill = Method)) +
+  geom_violin(color = "black", linewidth = 0.3, alpha = 0.25) +
+  geom_jitter(shape = 21, size = 1, stroke = 0.2, color = "black",
+              width = 0.3, alpha = 1) +
+  scale_fill_manual(values = c("EMP" = "#999999", "CUPID-seq" = "#FF0000")) +
+  labs(x = "Method", y = expression("Total reads (" * "\u00D7" * 10^3 * ")")) +
+  force_panelsizes(rows = unit(3.5, "cm"), cols = unit(2.5, "cm"), respect = TRUE) +
+  theme_bw() +
+  theme_custom_text() +
+  theme(aspect.ratio = 1.5,
+        legend.position = "none",
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+
+ggsave(paste0(directory, "Fig5/Fig5B.pdf"), plot = g, device = "pdf", width = 1.5, height = 1.83)
+
+```
+
+#######################################
+# Fig. 5C: Read quality across read
+#######################################
+
+```{r Fig 5C}
 
 pos_cupid <- read.table(paste0(here(), "/1-data/Quality_analysis/position_quality_cupid.tsv"), col.names = c("file","position","q_sum","q_count"))
 pos_emp   <- read.table(paste0(here(), "/1-data/Quality_analysis/position_quality_emp.tsv"), col.names = c("file","position","q_sum","q_count"))
@@ -93,7 +151,15 @@ g <- ggplot(pos_summary, aes(x = position, y = mean_Q, color = Group)) +
         panel.grid.major = element_blank(),      # Remove major grid lines
         panel.grid.minor = element_blank())      # Remove minor grid lines
 
-ggsave(paste0(directory, "Fig5/Fig5A.pdf"), plot = g, device = "pdf", width = 1.83, height = 1.83)
+ggsave(paste0(directory, "Fig5/Fig5C.pdf"), plot = g, device = "pdf", width = 1.83, height = 1.83)
+
+```
+
+#######################################
+# Fig. 5D: Read quality distribution
+#######################################
+
+```{r Fig 5D}
 
 read_cupid <- read.table(paste0(here(), "/1-data/Quality_analysis/read_quality_cupid.tsv"), col.names = c("file", "MeanQ"))
 read_emp   <- read.table(paste0(here(), "/1-data/Quality_analysis/read_quality_emp.tsv"), col.names = c("file", "MeanQ"))
@@ -121,14 +187,14 @@ g <- ggplot(read_quality_all, aes(x = MeanQ, fill = Group, color = Group)) +
         panel.grid.major = element_blank(),      # Remove major grid lines
         panel.grid.minor = element_blank())      # Remove minor grid lines
 
-ggsave(paste0(directory, "Fig5/Fig5A-2.pdf"), plot = g, device = "pdf",  width = 1.83, height = 1.83)
+ggsave(paste0(directory, "Fig5/Fig5D.pdf"), plot = g, device = "pdf",  width = 1.83, height = 1.83)
 ```
 
 #######################################
-# Fig. 5B: Chimera filter pass rate of matched samples (calculated using all reads)
+# Fig. 5E: Chimera filter pass rate of matched samples
 #######################################
 
-```{r Fig 5B}
+```{r Fig 5E}
 ps2plot <- ps %>% subset_samples(!Phase %in% c("L2", "L3") # only one plate of DIP
                                  & !Well %in% c("F01", "H01", "H12")) # remove blanks
 
@@ -180,66 +246,215 @@ g <- ggplot(plot_data, aes(x = Method, y = PctNonchim, fill = Method)) +
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank())
 
-ggsave(paste0(directory, "Fig5/Fig5B.pdf"), plot = g, device = "pdf", width = 1.5, height = 1.83)
+ggsave(paste0(directory, "Fig5/Fig5E.pdf"), plot = g, device = "pdf", width = 1.5, height = 1.83)
 ```
 
 #######################################
-# Fig. 5C: Read distribution
-# Fig. 5D: Evenness and Fig. 5E richness (calculated by downsampling to 10 K)
-# Fig. 5F: Singletons
+# Fig. 5F: Richness
 #######################################
 
-```{r Fig 5C-5F}
-
-ps2plot <- ps %>% subset_samples(!Phase %in% c("L2", "L3") # only one plate of DIP
-                                 & !Well %in% c("F01", "H01", "H12")) # remove blanks
+```{r Fig 5F}
 
 safe_max <- function(x) if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
 
-meta_df <- as(sample_data(ps2plot), "data.frame")
+ps_rare <- rarefy_even_depth(ps2plot, sample.size = 10000, rngseed = 100,
+                             replace = FALSE, trimOTUs = TRUE)
+
+otu_mat <- as(otu_table(ps_rare), "matrix")
+if (taxa_are_rows(ps_rare)) otu_mat <- t(otu_mat)
+
+shannon_fn <- function(row) {
+  p <- row[row > 0] / sum(row)
+  if (length(p) == 0) return(NA_real_)
+  -sum(p * log(p))
+}
+
+diversity_from_matrix <- function(mat) {
+  richness <- rowSums(mat > 0)
+  shannon  <- apply(mat, 1, shannon_fn)
+  evenness <- shannon / log(richness)
+  evenness[richness <= 1] <- NA
+  data.frame(SampleID = rownames(mat), Richness = richness,
+             Shannon = shannon, Evenness = evenness)
+}
+
+div_full <- diversity_from_matrix(otu_mat) %>%
+  rename_with(~paste0(., "_full"), -SampleID)
+
+otu_nosingle <- otu_mat; otu_nosingle[otu_mat == 1] <- 0
+div_nosingle <- diversity_from_matrix(otu_nosingle) %>%
+  rename_with(~paste0(., "_noSingle"), -SampleID)
+
+otu_nosingledouble <- otu_mat; otu_nosingledouble[otu_mat <= 2] <- 0
+div_nosingledouble <- diversity_from_matrix(otu_nosingledouble) %>%
+  rename_with(~paste0(., "_noSingleDouble"), -SampleID)
+
+frac_rare <- function(row, thresh) {
+  nz <- row[row > 0]
+  if (length(nz) == 0) return(NA_real_)
+  mean(nz <= thresh)
+}
+rare_frac <- data.frame(
+  SampleID         = rownames(otu_mat),
+  pct_singleton    = apply(otu_mat, 1, frac_rare, thresh = 1) * 100,
+  pct_le_doubleton = apply(otu_mat, 1, frac_rare, thresh = 2) * 100
+)
+
+richness_df <- div_full %>%
+  left_join(div_nosingle, by = "SampleID") %>%
+  left_join(div_nosingledouble, by = "SampleID") %>%
+  left_join(rare_frac, by = "SampleID")
+
+meta_df <- as(sample_data(ps_rare), "data.frame")
 meta_df$SampleID <- rownames(meta_df)
+richness_df <- dplyr::left_join(richness_df, meta_df, by = "SampleID")
 
-safe_max <- function(x) if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
+value_cols <- c("Richness_full", "Shannon_full", "Evenness_full",
+                "Richness_noSingle", "Shannon_noSingle", "Evenness_noSingle",
+                "Richness_noSingleDouble", "Shannon_noSingleDouble", "Evenness_noSingleDouble",
+                "pct_singleton", "pct_le_doubleton")
 
-reads_df <- meta_df %>%
+transposed_df <- richness_df %>%
   group_by(Subject, Well) %>%
-  mutate(EMP_reads = ifelse(PCR == "EMP", total_reads, NA),
-         DIP_reads = ifelse(PCR == "DIP", total_reads, NA)) %>%
-  select(Subject, Well, EMP_reads, DIP_reads) %>%
-  summarise(EMP_reads = safe_max(EMP_reads),
-            DIP_reads = safe_max(DIP_reads),
-            .groups = "drop") %>%
-  filter(!is.na(EMP_reads), !is.na(DIP_reads))
+  mutate(across(all_of(value_cols),
+                list(EMP = ~ifelse(PCR == "EMP", .x, NA),
+                     DIP = ~ifelse(PCR == "DIP", .x, NA)),
+                .names = "{.fn}_{.col}")) %>%
+  select(Subject, Well, starts_with("EMP_"), starts_with("DIP_")) %>%
+  summarise(across(everything(), safe_max), .groups = "drop")
 
-reads_df %>%
+summary_stats <- transposed_df %>%
   summarise(
-    EMP_mean = mean(EMP_reads, na.rm = TRUE), EMP_sd = sd(EMP_reads, na.rm = TRUE),
-    DIP_mean = mean(DIP_reads, na.rm = TRUE), DIP_sd = sd(DIP_reads, na.rm = TRUE),
-    n = n()
+    EMP_n = sum(!is.na(EMP_Richness_full)), DIP_n = sum(!is.na(DIP_Richness_full)),
+    across(where(is.numeric) & !c(EMP_n, DIP_n),
+           list(mean = ~mean(.x, na.rm = TRUE), sd = ~sd(.x, na.rm = TRUE)),
+           .names = "{.col}_{.fn}")
   )
 
-plot_data <- reads_df %>%
-  select(EMP_reads, DIP_reads) %>%
-  pivot_longer(cols = c(EMP_reads, DIP_reads), names_to = "Method", values_to = "Reads") %>%
-  mutate(Reads_K = Reads / 1000,
-         Method = if_else(Method == "DIP_reads", "CUPID-seq", "EMP"),
-         Method = factor(Method, levels = c("EMP", "CUPID-seq")))
+summary_stats %>% select(EMP_n, DIP_n, contains("Richness"), contains("Evenness"),
+                         contains("pct_singleton"), contains("pct_le_doubleton"))
 
-g <- ggplot(plot_data, aes(x = Method, y = Reads_K, fill = Method)) +
-  geom_violin(color = "black", linewidth = 0.3, alpha = 0.25) +
-  geom_jitter(shape = 21, size = 1, stroke = 0.2, color = "black",
-              width = 0.3, alpha = 1) +
-  scale_fill_manual(values = c("EMP" = "#999999", "CUPID-seq" = "#FF0000")) +
-  labs(x = "Method", y = expression("Total reads (" * "\u00D7" * 10^3 * ")")) +
-  force_panelsizes(rows = unit(3.5, "cm"), cols = unit(2.5, "cm"), respect = TRUE) +
+seq_lookup <- as.character(refseq(ps_rare))
+stopifnot(all(taxa_names(ps_rare) %in% names(seq_lookup)))
+
+edit_dist_results <- list()
+
+for (i in seq_len(nrow(otu_mat))) {
+  sample_name <- rownames(otu_mat)[i]
+  row <- otu_mat[i, ]
+  nz <- row[row > 0]
+  if (length(nz) < 2) next
+
+  dominant_name <- names(nz)[which.max(nz)]
+  dominant_seq  <- seq_lookup[[dominant_name]]
+
+  cand_names <- names(nz)[nz >= 2 & nz <= 10 & names(nz) != dominant_name]
+  if (length(cand_names) == 0) next
+
+  cand_seqs <- seq_lookup[cand_names]
+  dists <- adist(cand_seqs, dominant_seq)[, 1]
+
+  edit_dist_results[[length(edit_dist_results) + 1]] <- data.frame(
+    SampleID = sample_name,
+    count = nz[cand_names],
+    edit_dist_to_dominant = dists
+  )
+}
+
+edit_dist_df <- bind_rows(edit_dist_results)
+edit_dist_df <- left_join(edit_dist_df, meta_df, by = "SampleID")
+
+edit_dist_df %>%
+  group_by(PCR) %>%
+  summarise(
+    n_candidates = n(),
+    pct_within_1nt = mean(edit_dist_to_dominant <= 1) * 100,
+    pct_within_2nt = mean(edit_dist_to_dominant <= 2) * 100,
+    pct_within_3nt = mean(edit_dist_to_dominant <= 3) * 100,
+    median_dist    = median(edit_dist_to_dominant),
+    .groups = "drop"
+  )
+
+pairs <- meta_df %>%
+  filter(PCR %in% c("EMP", "DIP")) %>%
+  select(SampleID, Subject, Well, PCR) %>%
+  pivot_wider(names_from = PCR, values_from = SampleID, id_cols = c(Subject, Well)) %>%
+  filter(!is.na(EMP), !is.na(DIP), EMP %in% rownames(otu_mat), DIP %in% rownames(otu_mat))
+
+otu_full <- as(otu_table(ps2plot), "matrix")
+if (taxa_are_rows(ps2plot)) otu_full <- t(otu_full)
+
+emp_samples_full <- meta_df$SampleID[meta_df$PCR == "EMP" & meta_df$SampleID %in% rownames(otu_full)]
+emp_mat_full <- otu_full[emp_samples_full, , drop = FALSE]
+asv_ever_in_emp_full <- colSums(emp_mat_full > 0) > 0
+baseline_rate <- mean(asv_ever_in_emp_full) * 100
+
+results <- list()
+for (i in seq_len(nrow(pairs))) {
+  emp_h <- pairs$EMP[i]
+  dip_h <- pairs$DIP[i]
+
+  dip_row <- otu_mat[dip_h, ]
+  emp_row <- otu_mat[emp_h, ]
+
+  nz <- dip_row[dip_row > 0]
+  cand <- names(nz)[nz >= 2 & nz <= 10 & emp_row[names(nz)] == 0]
+  if (length(cand) == 0) next
+
+  results[[length(results) + 1]] <- data.frame(
+    pair = paste(pairs$Subject[i], pairs$Well[i]),
+    asv = cand,
+    count_in_dip = nz[cand],
+    seen_in_any_emp = asv_ever_in_emp_full[cand]
+  )
+}
+
+res_df <- bind_rows(results)
+
+cat("Total 'DIP-extra' ASV instances checked:", nrow(res_df), "\n")
+cat("Baseline rate (any ASV ever seen in EMP, full untrimmed universe):",
+    round(baseline_rate, 1), "%\n")
+cat("Observed rate (DIP-extra ASVs also seen in EMP elsewhere):",
+    round(mean(res_df$seen_in_any_emp) * 100, 1), "%\n")
+cat("Enrichment factor:", round(mean(res_df$seen_in_any_emp) / (baseline_rate/100), 2), "x\n")
+
+n_asv_full <- ntaxa(ps2plot)
+n_asv_rare <- ntaxa(ps_rare)
+cat("ASVs before rarefaction:", n_asv_full, "\n")
+cat("ASVs after rarefaction + trimOTUs:", n_asv_rare, "\n")
+cat("ASVs dropped by trimOTUs:", n_asv_full - n_asv_rare, "\n")
+
+trimmed_asvs <- setdiff(taxa_names(ps2plot), taxa_names(ps_rare))
+cat("Of the", length(trimmed_asvs), "ASVs trimOTUs removed, % ever seen in EMP (full data):",
+    round(mean(asv_ever_in_emp_full[trimmed_asvs]) * 100, 1), "%\n")
+
+g <- ggplot(transposed_df %>% filter(!is.na(EMP_Richness_full), !is.na(DIP_Richness_full)),
+            aes(x = EMP_Richness_full, y = DIP_Richness_full)) +
+  geom_point(shape = 21, size = 1, stroke = 0.2, fill = "#CCCCCC", color = "black") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red", size = 0.3) +
+  labs(x = "Richness (EMP)", y = "Richness (CUPID-seq)") +
+  scale_x_continuous(limits = c(0, 80)) +
+  scale_y_continuous(limits = c(0, 80)) +
+  force_panelsizes(rows = unit(3.5, "cm"), cols = unit(3.5, "cm"), respect = TRUE) +
   theme_bw() +
   theme_custom_text() +
-  theme(aspect.ratio = 1.5,
+  theme(aspect.ratio = 1,
         legend.position = "none",
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank())
+g <- ggMarginal(g, type = "density", fill = "#CCCCCC", color = "black", linewidth = 0.2, size = 8)
 
-ggsave(paste0(directory, "Fig5/Fig5C.pdf"), plot = g, device = "pdf", width = 1.5, height = 1.83)
+ggsave(paste0(directory, "Fig5/Fig5F.pdf"), plot = g, device = "pdf", width = 2, height = 2)
+
+```
+
+#######################################
+# Fig. 5G: Evenness
+#######################################
+
+```{r Fig 5G and extra DELETE LATER}
+
+safe_max <- function(x) if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
 
 ps_rare <- rarefy_even_depth(ps2plot, sample.size = 10000, rngseed = 100,
                              replace = FALSE, trimOTUs = TRUE)
@@ -428,7 +643,7 @@ g <- ggplot(transposed_df %>% filter(!is.na(EMP_Richness_full), !is.na(DIP_Richn
         panel.grid.minor = element_blank())
 g <- ggMarginal(g, type = "density", fill = "#CCCCCC", color = "black", linewidth = 0.2, size = 8)
 
-ggsave(paste0(directory, "Fig5/Fig5D.pdf"), plot = g, device = "pdf", width = 2, height = 2)
+ggsave(paste0(directory, "Fig5/Fig5F.pdf"), plot = g, device = "pdf", width = 2, height = 2)
 
 g <- ggplot(transposed_df %>% filter(!is.na(EMP_Evenness_full), !is.na(DIP_Evenness_full)),
             aes(x = EMP_Evenness_full, y = DIP_Evenness_full)) +
@@ -445,31 +660,15 @@ g <- ggplot(transposed_df %>% filter(!is.na(EMP_Evenness_full), !is.na(DIP_Evenn
         panel.grid.minor = element_blank())
 g <- ggMarginal(g, type = "density", fill = "#CCCCCC", color = "black", linewidth = 0.2, size = 8)
 
-ggsave(paste0(directory, "Fig5/Fig5E.pdf"), plot = g, device = "pdf", width = 2, height = 2)
-
-g <- ggplot(transposed_df %>% filter(!is.na(EMP_pct_singleton), !is.na(DIP_pct_singleton)),
-            aes(x = EMP_pct_singleton, y = DIP_pct_singleton)) +
-  geom_point(shape = 21, size = 1, stroke = 0.2, fill = "#CCCCCC", color = "black") +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red", size = 0.3) +
-  labs(x = "% singleton ASVs (EMP)", y = "% singleton ASVs (CUPID-seq)") +
-  force_panelsizes(rows = unit(3.5, "cm"), cols = unit(3.5, "cm"), respect = TRUE) +
-  theme_bw() + theme_custom_text() +
-  theme(aspect.ratio = 1,
-        legend.position = "none",
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank())
-
-g <- ggMarginal(g, type = "density", fill = "#CCCCCC", color = "black", linewidth = 0.2, size = 8)
-
-ggsave(paste0(directory, "Fig5/Fig5F.pdf"), plot = g, device = "pdf", width = 2, height = 2)
+ggsave(paste0(directory, "Fig5/Fig5G.pdf"), plot = g, device = "pdf", width = 2, height = 2)
 
 ```
 
 #######################################
-# Fig. 5G: ASV relative abundance of EMP vs CUPID-Seq
+# Extended Data Fig. 2: EMP and CUPID-Seq composition and beta diversity
 #######################################
 
-```{r Fig 5G}
+```{r Extended Data Fig 2}
 
 ps2plot <- ps_rarefied
 
@@ -496,7 +695,7 @@ g <- ggplot(df2plot %>% filter(Subject == "Subj5"), aes(x = 1, y = Abundance, fi
   theme(strip.text = element_blank(),
         strip.background = element_blank())
 
-ggsave(paste0(directory, "FigSX/FigSX_1.pdf"), plot = g, device = "pdf", width = 5.5, height = 3)
+ggsave(paste0(directory, "Extended/ED-Fig2A.pdf"), plot = g, device = "pdf", width = 5.5, height = 3)
 
 g <- ggplot(df2plot %>% filter(Subject == "Subj6"), aes(x = 1, y = Abundance, fill = Family2)) + 
   geom_bar(aes(x = PCR), position = "stack", stat = "identity", color = "black", linewidth = 0.1) +
@@ -508,7 +707,7 @@ g <- ggplot(df2plot %>% filter(Subject == "Subj6"), aes(x = 1, y = Abundance, fi
   theme(strip.text = element_blank(),
         strip.background = element_blank())
 
-ggsave(paste0(directory, "FigSX/FigSX_2.pdf"), plot = g, device = "pdf", width = 5.5, height = 3)
+ggsave(paste0(directory, "Extended/ED-Fig2B.pdf"), plot = g, device = "pdf", width = 5.5, height = 3)
 
 g <- ggplot(df2plot, aes(x = 1, y = Abundance, fill = Family2)) + 
   geom_bar(aes(x = PCR), position = "stack", stat = "identity", color = "black", linewidth = 0.1) +
@@ -526,8 +725,9 @@ g <- ggplot(df2plot, aes(x = 1, y = Abundance, fill = Family2)) +
 
 legend <- get_legend(g)
 
-ggsave(paste0(directory, "FigSX/FigSX_legend.pdf"), plot = legend, device = "pdf", width = 5, height = 5)
+ggsave(paste0(directory, "Extended/ED-Fig2_legend.pdf"), plot = legend, device = "pdf", width = 5, height = 5)
 
+#### PCoA
 
 set.seed(100) # Consistent pcoa
 
@@ -555,9 +755,10 @@ for (sid in c("Subj5", "Subj6")) {
   var_exp <- get_evals(pcoa_weighted)$variance_exp # variances
   
   g <- ggplot(ordination_data, aes(x = Axis.1, y = Axis.2, fill = PCR)) +
-    geom_line(aes(group = Drug_no), color = "black", linewidth = 0.2) +
+    geom_line(aes(group = Drug_no), color = "black", linewidth = 0.2, alpha = 0.5) +
     geom_point(stroke = 0.2, color = "black", shape = 21) +
-    scale_fill_manual(values = c("EMP" = "#666666", "DIP" = "red")) +
+    #scale_fill_manual(values = c("EMP" = "#666666", "DIP" = "red")) +
+    scale_fill_manual(values = c("EMP" = alpha("#666666", 0.5), "DIP" = alpha("red", 0.5))) +
     force_panelsizes(rows = unit(3.5, "cm"), cols = unit(3.5, "cm"), respect = TRUE) +
     guides(fill = guide_legend(override.aes = list(shape = 21))) + # Fill legend
     labs(x = paste0("PCo1 ", round(var_exp[1],2), "%"),
@@ -568,10 +769,30 @@ for (sid in c("Subj5", "Subj6")) {
           legend.position = "none") +
     theme_custom_text()
   
-  ggsave(paste0(directory, "/FigSX/PCoA-", sid, ".pdf"), plot = g, device = "pdf", width = 2, height = 2)
+  if (sid == "Subj5") {
+    ggsave(paste0(directory, "/Extended/ED-Fig2C.pdf"), plot = g, device = "pdf", width = 2, height = 2)
+  } else {
+    ggsave(paste0(directory, "/Extended/ED-Fig2D.pdf"), plot = g, device = "pdf", width = 2, height = 2)
+  }
 }
+```
 
-####
+#######################################
+# Fig. 5H: ASV relative abundance of EMP vs CUPID-Seq
+#######################################
+
+```{r Fig 5H}
+
+ps2plot <- ps_rarefied
+
+taxa2keep <- psmelt(ps2plot %>% transform_sample_counts(function(x) x/sum(x))) %>%
+  filter(Abundance > cutoff_SI)
+
+ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>%
+  transform_sample_counts(function(x) x/sum(x))
+
+df2plot <- psmelt(ps2plot)
+df2plot <- set_family_order(df2plot, taxa_order)
 
 # Mean abundance per row (per feature per sample)
 mean(df2plot %>% filter(Family == "Enterobacteriaceae") %>% pull(Abundance))
@@ -583,6 +804,7 @@ entero_per_sample <- df2plot %>%
             .groups = "drop")
 
 mean(entero_per_sample$Enterobacteriaceae)
+
 safe_max <- function(x) if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
 
 transposed_df <- df2plot %>%
@@ -631,9 +853,7 @@ g <- ggplot(transposed_df, aes(x = EMP, y = DIP, fill = Color)) +
         panel.grid.major = element_blank(),      # Remove major grid lines
         panel.grid.minor = element_blank())     # Remove minor grid lines
 
-ggsave(paste0(directory, "Fig5/Fig5G.pdf"), plot = g, device = "pdf", width = 2, height = 2)
-
-transposed_df
+ggsave(paste0(directory, "Fig5/Fig5H.pdf"), plot = g, device = "pdf", width = 2, height = 2)
 
 #### Exploring zero abundance ASVs
 
@@ -771,10 +991,38 @@ cat("  median min edit distance:", median(emp_only_min_dist), "\n")
 ```
 
 #######################################
-# Fig. S1: ASV relative abundance of EMP vs CUPID-Seq, broken down by family
+# Extended Data Fig. 3: ASV relative abundance of EMP vs CUPID-Seq, broken down by family
 #######################################
 
-```{r Fig S1}
+```{r Extended Data Fig 3}
+
+ps2plot <- ps_rarefied
+
+taxa2keep <- psmelt(ps2plot %>% transform_sample_counts(function(x) x/sum(x))) %>%
+  filter(Abundance > cutoff_SI)
+
+ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>%
+  transform_sample_counts(function(x) x/sum(x))
+
+df2plot <- psmelt(ps2plot)
+df2plot <- set_family_order(df2plot, taxa_order)
+
+safe_max <- function(x) if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
+
+transposed_df <- df2plot %>%
+  group_by(Subject, Well, Feature) %>%
+  mutate(EMP = ifelse(PCR == "EMP", ifelse(is.na(Abundance) | Abundance < cutoff_SI,
+                                           -3, log10(Abundance)), NA),
+         DIP = ifelse(PCR == "DIP", ifelse(is.na(Abundance) | Abundance < cutoff_SI,
+                                           -3, log10(Abundance)), NA)) %>%
+  select(Subject, Well, Feature, EMP, DIP) %>%
+  summarise(
+    EMP = safe_max(EMP),
+    DIP = safe_max(DIP),
+    .groups = "drop"
+  )
+
+transposed_df <- merge(transposed_df, taxa_order, by = "Feature")
 
 g <- ggplot(transposed_df, aes(x = EMP, y = DIP, fill = Color)) +
   geom_point(shape = 21, size = 1, stroke = 0.2, color = "black") +  # Fill color for the points
@@ -793,16 +1041,43 @@ g <- ggplot(transposed_df, aes(x = EMP, y = DIP, fill = Color)) +
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank())
 
-ggsave(paste0(directory, "FigS1/FigS1.pdf"), plot = g, device = "pdf", width = 6.5, height = 5)
+ggsave(paste0(directory, "Extended/ED-Fig3.pdf"), plot = g, device = "pdf", width = 6.5, height = 5)
 
 ```
 
 #######################################
-# Table S2: Correlation of families
+# Supplementary Table 2: Correlation of families
 #######################################
 
-```{r Table S2}
+```{r Supplementary Table 2}
 
+ps2plot <- ps_rarefied
+
+taxa2keep <- psmelt(ps2plot %>% transform_sample_counts(function(x) x/sum(x))) %>%
+  filter(Abundance > cutoff_SI)
+
+ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>%
+  transform_sample_counts(function(x) x/sum(x))
+
+df2plot <- psmelt(ps2plot)
+df2plot <- set_family_order(df2plot, taxa_order)
+
+safe_max <- function(x) if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
+
+transposed_df <- df2plot %>%
+  group_by(Subject, Well, Feature) %>%
+  mutate(EMP = ifelse(PCR == "EMP", ifelse(is.na(Abundance) | Abundance < cutoff_SI,
+                                           -3, log10(Abundance)), NA),
+         DIP = ifelse(PCR == "DIP", ifelse(is.na(Abundance) | Abundance < cutoff_SI,
+                                           -3, log10(Abundance)), NA)) %>%
+  select(Subject, Well, Feature, EMP, DIP) %>%
+  summarise(
+    EMP = safe_max(EMP),
+    DIP = safe_max(DIP),
+    .groups = "drop"
+  )
+
+transposed_df <- merge(transposed_df, taxa_order, by = "Feature")
 correlation_result1 <- transposed_df %>%
   filter(!(EMP == -3 & DIP == -3)) %>%
   group_by(Family2) %>%
@@ -831,10 +1106,10 @@ write_xlsx(correlation_result1, paste0(here(), "/1-data/TableS2.xlsx"))
 ```
 
 #######################################
-# Fig. S2A: Calculating median fold change per family
+# Extended Data Fig. 4A: Calculating median fold change per family
 #######################################
 
-```{r Fig S2A}
+```{r Extended Data Fig 4A}
 
 ps2plot <- ps_rarefied
 
@@ -906,16 +1181,16 @@ g <- ggplot(fold_changes_long, aes(x = Value, fill = Color)) +
         panel.grid.major = element_blank(),      # Remove major grid lines
         panel.grid.minor = element_blank())      # Remove minor grid lines
 
-ggsave(paste0(directory, "FigS2/FigS2A.pdf"), plot = g, device = "pdf", width = 5.8, height = 3)
+ggsave(paste0(directory, "Extended/ED-Fig4A.pdf"), plot = g, device = "pdf", width = 5.8, height = 3)
 ```
 
 #######################################
-# Fig. 5H: Normalization
+# Fig. 5I: Normalization
 #######################################
 
-```{r Fig 5H}
+```{r Fig 5I}
 
-# Need to run S2A section
+# Need to run Extended Data Fig 4A section
 
 ps2plot <- ps_rarefied
 
@@ -952,7 +1227,6 @@ ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>%
 
 df2plot <- psmelt(ps2plot)
 df2plot <- set_family_order(df2plot, taxa_order)
-#df2plot <- inner_join(df2plot, valid_pairs, by = c("Subject", "Well"))  # NEW
 
 transposed_df <- df2plot %>%
   group_by(Subject, Well, Feature) %>%
@@ -962,8 +1236,8 @@ transposed_df <- df2plot %>%
                                            -3, log10(Abundance)), NA)) %>%
   select(Subject, Well, Feature, EMP, DIP) %>%
   summarise(
-    EMP = if (all(is.na(EMP))) NA_real_ else max(EMP, na.rm = TRUE),  # was bare max(..., na.rm=TRUE)
-    DIP = if (all(is.na(DIP))) NA_real_ else max(DIP, na.rm = TRUE),  # was bare max(..., na.rm=TRUE)
+    EMP = if (all(is.na(EMP))) NA_real_ else max(EMP, na.rm = TRUE),
+    DIP = if (all(is.na(DIP))) NA_real_ else max(DIP, na.rm = TRUE),
     .groups = 'drop')
 
 transposed_df <- merge(transposed_df, taxa_order, by = "Feature")
@@ -1003,35 +1277,88 @@ g <- ggplot(transposed_df, aes(x = EMP, y = DIP, fill = Color)) +
         panel.grid.major = element_blank(),      # Remove major grid lines
         panel.grid.minor = element_blank())     # Remove minor grid lines
 
-ggsave(paste0(directory, "Fig5/Fig5H.pdf"), plot = g, device = "pdf", width = 2, height = 2)
+ggsave(paste0(directory, "Fig5/Fig5I.pdf"), plot = g, device = "pdf", width = 2, height = 2)
 
 correlation_result1 <- transposed_df %>%
   filter(!(EMP == -3 & DIP == -3)) %>%
   group_by(Family2) %>%
-  summarize(
-    n = sum(complete.cases(EMP, DIP)),
-    cor_value = if (n < 3 ||
-                    sd(EMP, na.rm = TRUE) == 0 ||
-                    sd(DIP, na.rm = TRUE) == 0) {
-      NA_real_
-    } else {
-      cor(EMP, DIP, method = "pearson", use = "complete.obs")
-    },
-    p_value = if (n < 3 ||
-                  sd(EMP, na.rm = TRUE) == 0 ||
-                  sd(DIP, na.rm = TRUE) == 0) {
-      NA_real_
-    } else {
-      cor.test(EMP, DIP, method = "pearson")$p.value
-    },
-    .groups = "drop"
-  )
+  summarize(n = sum(complete.cases(EMP, DIP)),
+            cor_value = if (n < 3 ||
+                            sd(EMP, na.rm = TRUE) == 0 ||
+                            sd(DIP, na.rm = TRUE) == 0) {
+              NA_real_
+            } else {
+              cor(EMP, DIP, method = "pearson", use = "complete.obs")
+            },
+            p_value = if (n < 3 ||
+                          sd(EMP, na.rm = TRUE) == 0 ||
+                          sd(DIP, na.rm = TRUE) == 0) {
+              NA_real_
+            } else {
+              cor.test(EMP, DIP, method = "pearson")$p.value
+            },
+            .groups = "drop")
 
 correlation_result1
 
 ```
 
-```{r Fig S2B}
+#######################################
+# Extended Data Fig. 4B: Calculating median fold change per family
+#######################################
+
+```{r Extended Data Fig 4B}
+# Need to run Extended Data Fig 4A section
+
+ps2plot <- ps_rarefied
+
+taxa2keep <- psmelt(ps2plot %>% transform_sample_counts(function(x) x/sum(x))) %>%
+  filter(Abundance > cutoff_SI)
+
+ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>%
+  transform_sample_counts(function(x) x/sum(x))
+
+ps_long <- psmelt(ps2plot)
+
+ps_long <- ps_long %>%
+  left_join(medians, by = c("Family2" = "Family")) %>%
+  mutate(Abundance = if_else(
+    PCR == "DIP" & !is.na(median_value),
+    Abundance / median_value,
+    Abundance
+  ))
+
+otu_new <- ps_long %>%
+  select(Sample, OTU, Abundance) %>%
+  pivot_wider(
+    names_from = Sample,
+    values_from = Abundance,
+    values_fill = 0
+  ) %>%
+  column_to_rownames("OTU") %>%
+  as.matrix()
+
+otu_table(ps2plot) <- otu_table(otu_new, taxa_are_rows = TRUE)
+
+ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>%
+  transform_sample_counts(function(x) x/sum(x))
+
+df2plot <- psmelt(ps2plot)
+df2plot <- set_family_order(df2plot, taxa_order)
+
+transposed_df <- df2plot %>%
+  group_by(Subject, Well, Feature) %>%
+  mutate(EMP = ifelse(PCR == "EMP", ifelse(is.na(Abundance) | Abundance < cutoff_SI,
+                                           -3, log10(Abundance)), NA),
+         DIP = ifelse(PCR == "DIP", ifelse(is.na(Abundance) | Abundance < cutoff_SI,
+                                           -3, log10(Abundance)), NA)) %>%
+  select(Subject, Well, Feature, EMP, DIP) %>%
+  summarise(
+    EMP = if (all(is.na(EMP))) NA_real_ else max(EMP, na.rm = TRUE),
+    DIP = if (all(is.na(DIP))) NA_real_ else max(DIP, na.rm = TRUE),
+    .groups = 'drop')
+
+transposed_df <- merge(transposed_df, taxa_order, by = "Feature")
 
 g <- ggplot(transposed_df, aes(x = EMP, y = DIP, fill = Color)) +
   geom_point(shape = 21, size = 1, stroke = 0.2, color = "black") +  # Fill color for the points
@@ -1050,15 +1377,66 @@ g <- ggplot(transposed_df, aes(x = EMP, y = DIP, fill = Color)) +
         panel.grid.major = element_blank(),      # Remove major grid lines
         panel.grid.minor = element_blank())  # Remove minor grid lines
 
-ggsave(paste0(directory, "FigS2/FigS2B.pdf"), plot = g, device = "pdf", width = 6.5, height = 5)
+ggsave(paste0(directory, "Extended/ED-Fig4B.pdf"), plot = g, device = "pdf", width = 6.5, height = 5)
 
 ```
 
 #######################################
-# Table S3: Correlation of families
+# Supplementary Table 3: Correlation of families
 #######################################
 
-```{r Table S3}
+```{r Supplementary Table 3}
+# Need to run Extended Data Fig 4A section
+
+ps2plot <- ps_rarefied
+
+taxa2keep <- psmelt(ps2plot %>% transform_sample_counts(function(x) x/sum(x))) %>%
+  filter(Abundance > cutoff_SI)
+
+ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>%
+  transform_sample_counts(function(x) x/sum(x))
+
+ps_long <- psmelt(ps2plot)
+
+ps_long <- ps_long %>%
+  left_join(medians, by = c("Family2" = "Family")) %>%
+  mutate(Abundance = if_else(
+    PCR == "DIP" & !is.na(median_value),
+    Abundance / median_value,
+    Abundance
+  ))
+
+otu_new <- ps_long %>%
+  select(Sample, OTU, Abundance) %>%
+  pivot_wider(
+    names_from = Sample,
+    values_from = Abundance,
+    values_fill = 0
+  ) %>%
+  column_to_rownames("OTU") %>%
+  as.matrix()
+
+otu_table(ps2plot) <- otu_table(otu_new, taxa_are_rows = TRUE)
+
+ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>%
+  transform_sample_counts(function(x) x/sum(x))
+
+df2plot <- psmelt(ps2plot)
+df2plot <- set_family_order(df2plot, taxa_order)
+
+transposed_df <- df2plot %>%
+  group_by(Subject, Well, Feature) %>%
+  mutate(EMP = ifelse(PCR == "EMP", ifelse(is.na(Abundance) | Abundance < cutoff_SI,
+                                           -3, log10(Abundance)), NA),
+         DIP = ifelse(PCR == "DIP", ifelse(is.na(Abundance) | Abundance < cutoff_SI,
+                                           -3, log10(Abundance)), NA)) %>%
+  select(Subject, Well, Feature, EMP, DIP) %>%
+  summarise(
+    EMP = if (all(is.na(EMP))) NA_real_ else max(EMP, na.rm = TRUE),
+    DIP = if (all(is.na(DIP))) NA_real_ else max(DIP, na.rm = TRUE),
+    .groups = 'drop')
+
+transposed_df <- merge(transposed_df, taxa_order, by = "Feature")
 
 correlation_result2 <- transposed_df %>%
   filter(!(EMP == -3 & DIP == -3)) %>%
@@ -1088,10 +1466,10 @@ write_xlsx(correlation_result2, paste0(here(), "/1-data/TableS3.xlsx"))
 ```
 
 #######################################
-# Fig. 5I: Bray-Curtis distance
+# Fig. 5J: Bray-Curtis distance
 #######################################
 
-```{r Fig 5I}
+```{r Fig 5J}
 
 ps2plot <- ps_rarefied
 
@@ -1150,7 +1528,8 @@ bc_filtered <- bc_long_meta %>%
     label = if_else(
       Subject1 == Subject2 & Well1 == Well2 & Drug1 == Drug2,
       "Same", "Different"
-    )
+    ),
+      label = factor(label, levels = c("Same", "Different"))
   )
 
 g <- ggplot(bc_filtered, aes(x = distance, fill = label)) +
@@ -1166,6 +1545,6 @@ g <- ggplot(bc_filtered, aes(x = distance, fill = label)) +
         panel.grid.major = element_blank(),      # Remove major grid lines
         panel.grid.minor = element_blank())      # Remove minor grid lines
 
-ggsave(paste0(directory, "Fig5/Fig5I.pdf"), plot = g, device = "pdf", width = 2, height = 2)
+ggsave(paste0(directory, "Fig5/Fig5J.pdf"), plot = g, device = "pdf", width = 2, height = 2)
 ```
 
